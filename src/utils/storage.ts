@@ -1,0 +1,272 @@
+import {
+  ALL_MICROTOPICS,
+  createInitialUserProfile,
+} from '../data/curriculum';
+import {
+  addDaysISO,
+  daysBetweenISO,
+  estimateThetaNewtonRaphson,
+  fsrsUpdate,
+  updateBKT,
+} from '../engine/psychometrics';
+import type {
+  ErrorCategory,
+  ExerciseQuestion,
+  FsrsRating,
+  UserStudyProfile,
+} from '../types/study';
+
+const STORAGE_KEY = 'dreamland_academy_thaisa_v1';
+
+export function loadUserProfile(): UserStudyProfile {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createInitialUserProfile('calibrated');
+    const parsed = JSON.parse(raw) as UserStudyProfile;
+    if (!parsed || !parsed.microtopics) {
+      return createInitialUserProfile('calibrated');
+    }
+
+    // Ensure any newly added microtopics exist safely
+    const fresh = createInitialUserProfile('calibrated');
+    for (const mt of ALL_MICROTOPICS) {
+      if (!parsed.microtopics[mt.id]) {
+        parsed.microtopics[mt.id] = fresh.microtopics[mt.id];
+      }
+    }
+    for (const fcId of Object.keys(fresh.flashcards)) {
+      if (!parsed.flashcards[fcId]) {
+        parsed.flashcards[fcId] = fresh.flashcards[fcId];
+      }
+    }
+
+    // Reset daily routine checklist if date changed
+    const todayISO = new Date().toISOString().slice(0, 10);
+    if (parsed.routineDateISO !== todayISO) {
+      parsed.routineDateISO = todayISO;
+      parsed.completedRoutineBlocksToday = [];
+      parsed.dayParity = new Date().getDate() % 2 === 1 ? 'odd' : 'even';
+    }
+
+    return parsed;
+  } catch {
+    return createInitialUserProfile('calibrated');
+  }
+}
+
+export function saveUserProfile(profile: UserStudyProfile): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+  } catch {
+    // Ignore quota errors cleanly
+  }
+}
+
+export function recordQuestionAttempt(
+  profile: UserStudyProfile,
+  params: {
+    question: ExerciseQuestion;
+    correct: boolean;
+    timeSpentSec: number;
+    wasGuess?: boolean;
+    errorCategory?: ErrorCategory;
+  }
+): {
+  nextProfile: UserStudyProfile;
+  deltaTheta: number;
+  deltaPKnown: number;
+} {
+  const { question, correct, timeSpentSec, wasGuess, errorCategory } = params;
+  const mtId = question.microtopicId;
+  const prev = profile.microtopics[mtId];
+  if (!prev) {
+    return { nextProfile: profile, deltaTheta: 0, deltaPKnown: 0 };
+  }
+
+  const now = new Date();
+  const newRecord = {
+    questionId: question.id,
+    correct,
+    a: question.irt.a,
+    b: question.irt.b,
+    c: question.irt.c,
+    timestamp: now.toISOString(),
+    timeSpentSec,
+    wasGuess,
+    errorCategory,
+  };
+
+  const responses = [...prev.responses, newRecord];
+
+  // Combine prior theta softly with new responses so baseline doesn't wildly jump on 1 question
+  const irtResult = estimateThetaNewtonRaphson(
+    responses,
+    prev.theta,
+    prev.theta * 0.65,
+    1.6
+  );
+
+  const bkt = updateBKT({
+    pKnown: prev.pKnown,
+    pTransit: prev.pTransit,
+    pGuess: prev.pGuess,
+    pSlip: prev.pSlip,
+    correct,
+    errorCategory,
+    wasGuess,
+  });
+
+  const elapsed = daysBetweenISO(prev.lastReviewISO, now);
+  const fsrsRes = fsrsUpdate({
+    stabilityDays: prev.stabilityDays,
+    difficulty: prev.difficulty,
+    elapsedDays: elapsed,
+    grade: correct ? (wasGuess ? 2 : 3) : 1,
+    isFirstReview: prev.fsrsReps === 0,
+  });
+
+  const nextErrorCounts = { ...prev.errorCounts };
+  if (!correct && errorCategory) {
+    nextErrorCounts[errorCategory] = (nextErrorCounts[errorCategory] ?? 0) + 1;
+  }
+
+  const updatedMt = {
+    ...prev,
+    theta: irtResult.theta,
+    standardError: irtResult.standardError,
+    responses,
+    pKnown: bkt.pKnownNext,
+    pGuess: bkt.updatedGuess,
+    pSlip: bkt.updatedSlip,
+    stabilityDays: fsrsRes.newStabilityDays,
+    difficulty: fsrsRes.newDifficulty,
+    lastReviewISO: now.toISOString(),
+    nextReviewISO: addDaysISO(fsrsRes.nextIntervalDays, now),
+    fsrsReps: prev.fsrsReps + 1,
+    fsrsLapses: prev.fsrsLapses + (correct ? 0 : 1),
+    errorCounts: nextErrorCounts,
+  };
+
+  const nextProfile: UserStudyProfile = {
+    ...profile,
+    totalMinutesStudied:
+      profile.totalMinutesStudied + Math.max(1, Math.round(timeSpentSec / 60)),
+    microtopics: {
+      ...profile.microtopics,
+      [mtId]: updatedMt,
+    },
+  };
+
+  return {
+    nextProfile,
+    deltaTheta: Number((updatedMt.theta - prev.theta).toFixed(3)),
+    deltaPKnown: Number((updatedMt.pKnown - prev.pKnown).toFixed(4)),
+  };
+}
+
+export function applyErrorTagToLastAttempt(
+  profile: UserStudyProfile,
+  microtopicId: string,
+  questionId: string,
+  category: ErrorCategory
+): UserStudyProfile {
+  const prev = profile.microtopics[microtopicId];
+  if (!prev) return profile;
+
+  const updatedResponses = prev.responses.map((r, idx) =>
+    idx === prev.responses.length - 1 && r.questionId === questionId
+      ? { ...r, errorCategory: category }
+      : r
+  );
+
+  // Re-adjust BKT slip/guess lightly based on explicit reflection
+  const bktAdjust = updateBKT({
+    pKnown: prev.pKnown,
+    pTransit: 0.04,
+    pGuess: prev.pGuess,
+    pSlip: prev.pSlip,
+    correct: false,
+    errorCategory: category,
+  });
+
+  return {
+    ...profile,
+    microtopics: {
+      ...profile.microtopics,
+      [microtopicId]: {
+        ...prev,
+        responses: updatedResponses,
+        pGuess: bktAdjust.updatedGuess,
+        pSlip: bktAdjust.updatedSlip,
+        errorCounts: {
+          ...prev.errorCounts,
+          [category]: (prev.errorCounts[category] ?? 0) + 1,
+        },
+      },
+    },
+  };
+}
+
+export function recordFlashcardReview(
+  profile: UserStudyProfile,
+  cardId: string,
+  grade: FsrsRating
+): { nextProfile: UserStudyProfile; nextIntervalDays: number } {
+  const prevCard = profile.flashcards[cardId];
+  if (!prevCard) return { nextProfile: profile, nextIntervalDays: 1 };
+
+  const now = new Date();
+  const elapsed = daysBetweenISO(prevCard.lastReviewISO, now);
+  const res = fsrsUpdate({
+    stabilityDays: prevCard.stabilityDays,
+    difficulty: prevCard.difficulty,
+    elapsedDays: elapsed,
+    grade,
+    isFirstReview: prevCard.reps === 0,
+  });
+
+  const mt = profile.microtopics[prevCard.microtopicId];
+  let updatedMt = mt;
+  if (mt) {
+    // Active recall review reinforces microtopic stability & BKT slightly
+    const bktBonus =
+      grade >= 3
+        ? Math.min(0.995, mt.pKnown + (1 - mt.pKnown) * 0.08)
+        : Math.max(0.15, mt.pKnown * 0.94);
+
+    updatedMt = {
+      ...mt,
+      pKnown: Number(bktBonus.toFixed(4)),
+      stabilityDays: Number(
+        (mt.stabilityDays * 0.6 + res.newStabilityDays * 0.4).toFixed(2)
+      ),
+      lastReviewISO: now.toISOString(),
+      nextReviewISO: addDaysISO(res.nextIntervalDays, now),
+    };
+  }
+
+  const nextProfile: UserStudyProfile = {
+    ...profile,
+    totalMinutesStudied: profile.totalMinutesStudied + 1,
+    flashcards: {
+      ...profile.flashcards,
+      [cardId]: {
+        ...prevCard,
+        stabilityDays: res.newStabilityDays,
+        difficulty: res.newDifficulty,
+        lastReviewISO: now.toISOString(),
+        nextReviewISO: addDaysISO(res.nextIntervalDays, now),
+        reps: prevCard.reps + 1,
+        lapses: prevCard.lapses + (grade === 1 ? 1 : 0),
+      },
+    },
+    microtopics: updatedMt
+      ? {
+          ...profile.microtopics,
+          [prevCard.microtopicId]: updatedMt,
+        }
+      : profile.microtopics,
+  };
+
+  return { nextProfile, nextIntervalDays: res.nextIntervalDays };
+}

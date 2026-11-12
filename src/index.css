@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="popstar"] {
+  /* Popstar Cream — Inspired by Official Kirby Portal (kirby.jp) & 3DS Home Theme */
+  --bg-app: #FAF6F0;
+  --bg-sidebar: #F4ECE6;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFF9F5;
+  --bg-subtle: #F3EAE4;
+  --bg-accent-soft: #FDECEF;
+
+  --text-primary: #2B1E28;
+  --text-secondary: #5C4B57;
+  --text-muted: #8C7A86;
+
+  --border-subtle: #E6D8D2;
+  --border-strong: #D4B8B4;
+
+  --kirby-pink: #E86F88;
+  --kirby-pink-bright: #F48CA5;
+  --kirby-pink-soft: #FCE8EC;
+  --warp-gold: #E5A918;
+  --warp-gold-bg: #FEF6DC;
+  --maxim-red: #D94E5A;
+  --mint-ok: #2E9B68;
+  --sky-info: #3B82C4;
+
+  --kirby-pink-core: #F48CA5;
+  --kirby-pink-deep: #D95B78;
+  --popstar-night: #2B1E28;
+  --cotton-cloud-white: #FFFFFF;
+}
+
+[data-theme="dreamland"] {
+  /* Switch Pastel — Inspired by Kirby and the Forgotten Land / Return to Dream Land Console UI */
+  --bg-app: #FDF4F6;
+  --bg-sidebar: #F9E8EC;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFF8FA;
+  --bg-subtle: #F7E4E9;
+  --bg-accent-soft: #FCE4EC;
+
+  --text-primary: #23192D;
+  --text-secondary: #534360;
+  --text-muted: #847291;
+
+  --border-subtle: #DFCCD2;
+  --border-strong: #EDAEC0;
+
+  --kirby-pink: #E05A7A;
+  --kirby-pink-bright: #FF94B2;
+  --kirby-pink-soft: #FFE8EF;
+  --warp-gold: #D99B08;
+  --warp-gold-bg: #FFF7D6;
+  --maxim-red: #E11D48;
+  --mint-ok: #16A34A;
+  --sky-info: #2563EB;
+
+  --kirby-pink-core: #FF94B2;
+  --kirby-pink-deep: #E05A7A;
+  --popstar-night: #23192D;
+  --cotton-cloud-white: #FFFFFF;
+}
+
+[data-theme="fountain"] {
+  /* Fountain of Dreams — PC Night Comfort Theme (Starlight Twilight) */
+  --bg-app: #171520;
+  --bg-sidebar: #13111B;
+  --bg-surface: #201D2B;
+  --bg-elevated: #272335;
+  --bg-subtle: #2C273C;
+  --bg-accent-soft: #352637;
+
+  --text-primary: #F2ECF5;
+  --text-secondary: #C2B8CA;
+  --text-muted: #887E94;
+
+  --border-subtle: #322D42;
+  --border-strong: #4A3E59;
+
+  --kirby-pink: #F28BA8;
+  --kirby-pink-bright: #FFB3C6;
+  --kirby-pink-soft: #382534;
+  --warp-gold: #F5C84B;
+  --warp-gold-bg: #332D1E;
+  --maxim-red: #F87171;
+  --mint-ok: #4ADE80;
+  --sky-info: #60A5FA;
+
+  --kirby-pink-core: #F28BA8;
+  --kirby-pink-deep: #F28BA8;
+  --popstar-night: #F2ECF5;
+  --cotton-cloud-white: #201D2B;
+}
+
+@layer base {
+  html,
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.015em;
+  }
+
+  .font-kirby {
+    font-family: 'Fredoka', 'Plus Jakarta Sans', sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+}
+
+/* Clean Study App Surfaces (Notion / Linear / Console Hybrid) */
+.dream-card {
+  background-color: var(--bg-surface);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 3px rgba(28, 20, 26, 0.04);
+}
+
+.dream-card-soft {
+  background-color: var(--bg-elevated);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Console-inspired tactile primary button */
+.dream-btn-primary {
+  background-color: var(--kirby-pink);
+  color: #FFFFFF;
+  border-radius: 8px;
+  font-weight: 600;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+  transition: background-color 120ms ease, transform 80ms ease;
+}
+
+[data-theme="fountain"] .dream-btn-primary {
+  color: #171520;
+}
+
+.dream-btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.dream-btn-primary:active {
+  transform: translateY(1px);
+}
+
+/* Subtle Nintendo Console Dot/Grid Header Accent */
+.kirby-console-dots {
+  background-image: radial-gradient(var(--border-subtle) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+
+/* KaTeX high-contrast clean technical blocks */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.75rem 1rem;
+  margin: 0.65rem 0;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--kirby-pink);
+  border-radius: 8px;
+  color: var(--text-primary);
+}
+
+.katex {
+  color: var(--text-primary);
+  font-size: 1.02em;
+}
+
+/* Dark theme overrides for legacy Tailwind utility classes inside views/diagrams */
+[data-theme="fountain"] .bg-white {
+  background-color: var(--bg-surface) !important;
+}
+
+[data-theme="fountain"] .bg-pink-50,
+[data-theme="fountain"] .bg-pink-50\/40,
+[data-theme="fountain"] .bg-pink-50\/50,
+[data-theme="fountain"] .bg-pink-50\/35,
+[data-theme="fountain"] .bg-pink-50\/70,
+[data-theme="fountain"] .bg-slate-50 {
+  background-color: var(--bg-elevated) !important;
+}
+
+[data-theme="fountain"] .text-indigo-950,
+[data-theme="fountain"] .text-slate-800,
+[data-theme="fountain"] .text-\[\#1E1B4B\] {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="fountain"] .text-slate-700,
+[data-theme="fountain"] .text-slate-600 {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="fountain"] .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="fountain"] .border-pink-100,
+[data-theme="fountain"] .border-pink-200,
+[data-theme="fountain"] .border-slate-200 {
+  border-color: var(--border-subtle) !important;
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--kirby-pink);
+}
