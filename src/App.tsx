@@ -3,11 +3,9 @@ import {
   Activity,
   BookOpen,
   Brain,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Clock,
-  FolderOpen,
+  Heart,
+  HelpCircle,
   Home,
   Menu,
   Moon,
@@ -42,55 +40,78 @@ import {
   ALL_QUESTIONS,
   getMicrotopicsForTrack,
 } from './data/curriculum';
-import { PLANETS, TRACK_METADATA } from './data/planetsAndCopyAbilities';
-import type { PlanetId, StudyTrack, UserStudyProfile } from './types/study';
+import { TRACK_METADATA } from './data/planetsAndCopyAbilities';
+import type { StudyTrack, UserStudyProfile } from './types/study';
 import { loadUserProfile, saveUserProfile } from './utils/storage';
 
 type KirbyThemeId = 'popstar' | 'dreamland' | 'fountain';
 
 const THEME_STORAGE_KEY = 'kirby_study_theme_v1';
 
-const NAV_ITEMS: Array<{
-  id: AppViewId;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
+const NAV_GROUPS: Array<{
+  groupLabel: string;
+  items: Array<{
+    id: AppViewId;
+    label: string;
+    subtitle: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }>;
 }> = [
   {
-    id: 'dashboard',
-    label: 'Início & Meu Dia',
-    icon: Home,
+    groupLabel: 'Meu Espaço',
+    items: [
+      {
+        id: 'dashboard',
+        label: 'Início & Guia',
+        subtitle: 'Dedicatória, Tutorial & Dia',
+        icon: Home,
+      },
+      {
+        id: 'rotina',
+        label: 'Cronograma 6–8h',
+        subtitle: 'Rotina & Pausas',
+        icon: Clock,
+      },
+    ],
   },
   {
-    id: 'biblioteca',
-    label: 'Caderno & Teoria',
-    icon: BookOpen,
-  },
-  {
-    id: 'exercicios',
-    label: 'Banco de Questões',
-    icon: Zap,
-  },
-  {
-    id: 'auto-revisao',
-    label: 'Flashcards (FSRS)',
-    icon: Brain,
-  },
-  {
-    id: 'rotina',
-    label: 'Cronograma 6–8h',
-    icon: Clock,
-  },
-  {
-    id: 'simulados',
-    label: 'Simulados de Banca',
-    icon: Swords,
-  },
-  {
-    id: 'matriz',
-    label: 'Edital & Desempenho',
-    icon: Activity,
+    groupLabel: 'Estudo & Prática',
+    items: [
+      {
+        id: 'biblioteca',
+        label: 'Caderno & Teoria',
+        subtitle: '28 Matérias, Fórmulas & Aulas',
+        icon: BookOpen,
+      },
+      {
+        id: 'exercicios',
+        label: 'Banco de Questões',
+        subtitle: '56 Questões Resolvidas',
+        icon: Zap,
+      },
+      {
+        id: 'auto-revisao',
+        label: 'Flashcards FSRS',
+        subtitle: 'Revisão Espaçada Ativa',
+        icon: Brain,
+      },
+      {
+        id: 'simulados',
+        label: 'Simulados de Banca',
+        subtitle: 'Cesgranrio & Cebraspe',
+        icon: Swords,
+      },
+      {
+        id: 'matriz',
+        label: 'Edital & Progresso',
+        subtitle: 'Matriz & Nivelamento',
+        icon: Activity,
+      },
+    ],
   },
 ];
+
+const FLAT_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 function formatTimerClock(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
@@ -108,6 +129,7 @@ export function App() {
   const [revisionScope, setRevisionScope] = useState<'due' | 'selected'>('due');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [tutorialModalOpen, setTutorialModalOpen] = useState(false);
 
   // Kirby Console / Browser / PC Theme
   const [theme, setTheme] = useState<KirbyThemeId>(() => {
@@ -130,17 +152,6 @@ export function App() {
       // ignore
     }
   }, [theme]);
-
-  // Collapsible Planet Groups in Sidebar Subject Tree
-  const [expandedPlanets, setExpandedPlanets] = useState<Record<PlanetId, boolean>>({
-    'termofluidos': true,
-    'solidos-materiais': true,
-    'maquinas-equipamentos': false,
-    'eletro-circuitos': false,
-    'potencia-protecao': false,
-    'controle-eletronica-mat': false,
-    'basicos-interdisciplinar': false,
-  });
 
   // Persistent Top-Bar Focus / Break Timer
   const [timerSeconds, setTimerSeconds] = useState(50 * 60);
@@ -170,13 +181,14 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSearchOpen((o) => !o);
-      } else if (e.key === 'Escape' && searchOpen) {
+      } else if (e.key === 'Escape') {
         setSearchOpen(false);
+        setTutorialModalOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [searchOpen]);
+  }, []);
 
   const handleUpdateProfile = (next: UserStudyProfile) => {
     setProfile(next);
@@ -185,13 +197,6 @@ export function App() {
 
   const handleNavigate = (view: AppViewId, microtopicId?: string) => {
     if (microtopicId) {
-      const targetMt = ALL_MICROTOPICS.find((m) => m.id === microtopicId);
-      if (targetMt) {
-        setExpandedPlanets((prev) => ({
-          ...prev,
-          [targetMt.planetId]: true,
-        }));
-      }
       const next = {
         ...profile,
         selectedMicrotopicId: microtopicId,
@@ -263,7 +268,6 @@ export function App() {
     [profile.selectedMicrotopicId]
   );
 
-  // Quick search results across topics, norms, equations, and questions
   const quickSearchResults = useMemo(() => {
     const q = quickQuery.trim().toLowerCase();
     if (!q) {
@@ -297,28 +301,36 @@ export function App() {
   }, [quickQuery, trackMicrotopics]);
 
   const currentViewLabel =
-    NAV_ITEMS.find((n) => n.id === activeView)?.label ?? 'Início';
+    FLAT_NAV_ITEMS.find((n) => n.id === activeView)?.label ?? 'Início & Guia';
 
   return (
     <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] flex flex-col lg:flex-row">
       {/* Mobile Header */}
-      <header className="lg:hidden sticky top-0 z-40 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-4 py-2.5 flex items-center justify-between">
+      <header className="lg:hidden sticky top-0 z-40 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <KirbyMascot
             ability={timerMode === 'tomato' ? 'sleep' : 'scholar'}
-            size={34}
+            size={36}
           />
           <div>
-            <div className="font-bold text-sm leading-tight">
-              StudyMyLove • {profile.studentName}
+            <div className="font-bold text-sm leading-tight flex items-center gap-1">
+              <span>StudyMyLove</span>
+              <Heart className="w-3.5 h-3.5 text-[var(--kirby-pink)] fill-[var(--kirby-pink)]" />
             </div>
-            <div className="text-[11px] text-[var(--text-secondary)] font-mono">
-              ★ {trackStats.masteredCount}/{trackStats.totalCount} •{' '}
-              {trackStats.avgPct}% domínio
+            <div className="text-[11px] text-[var(--text-secondary)]">
+              Para a {profile.studentName} • {trackStats.avgPct}% domínio
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setTutorialModalOpen(true)}
+            aria-label="Como usar"
+            className="p-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] cursor-pointer"
+          >
+            <HelpCircle className="w-4 h-4 text-[var(--kirby-pink)]" />
+          </button>
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
@@ -340,107 +352,101 @@ export function App() {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-x-0 top-[55px] bottom-0 z-40 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] overflow-y-auto p-4 space-y-4">
-          <div className="space-y-1">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const active = activeView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNavigate(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    active
-                      ? 'bg-[var(--kirby-pink-soft)] text-[var(--text-primary)] border border-[var(--border-strong)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <Icon className="w-4 h-4 text-[var(--kirby-pink)]" />
-                    <span>{item.label}</span>
-                  </span>
-                  {item.id === 'auto-revisao' && trackStats.dueCards > 0 && (
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--warp-gold-bg)] text-[var(--text-primary)] border border-[var(--border-subtle)]">
-                      {trackStats.dueCards}
+        <div className="lg:hidden fixed inset-x-0 top-[61px] bottom-0 z-40 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] overflow-y-auto p-4 space-y-5">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.groupLabel} className="space-y-1.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] px-2">
+                {group.groupLabel}
+              </div>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = activeView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNavigate(item.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
+                      active
+                        ? 'bg-[var(--kirby-pink-soft)] text-[var(--text-primary)] font-semibold border border-[var(--border-strong)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <Icon className="w-4 h-4 text-[var(--kirby-pink)] shrink-0" />
+                      <span>
+                        <span className="block text-xs font-bold text-[var(--text-primary)]">
+                          {item.label}
+                        </span>
+                        <span className="block text-[11px] text-[var(--text-secondary)]">
+                          {item.subtitle}
+                        </span>
+                      </span>
                     </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              Matérias do Edital ({trackMicrotopics.length})
+                    {item.id === 'auto-revisao' && trackStats.dueCards > 0 && (
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--warp-gold-bg)] text-[var(--text-primary)] border border-[var(--border-subtle)]">
+                        {trackStats.dueCards}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-            <div className="grid grid-cols-1 gap-1 max-h-64 overflow-y-auto">
-              {trackMicrotopics.map((mt) => (
-                <button
-                  key={mt.id}
-                  type="button"
-                  onClick={() => handleNavigate('biblioteca', mt.id)}
-                  className="text-left px-2.5 py-1.5 rounded-md text-xs hover:bg-[var(--bg-elevated)] flex items-center justify-between gap-2 cursor-pointer"
-                >
-                  <span className="truncate">
-                    <strong className="font-mono text-[11px] text-[var(--kirby-pink)]">
-                      {mt.code}
-                    </strong>{' '}
-                    {mt.title}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
-      {/* Desktop Left Personal Study Sidebar */}
+      {/* Desktop Left Sidebar — Clean, Breathable, Well-Positioned */}
       {!sidebarCollapsed && (
-        <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:sticky lg:top-0 lg:h-screen bg-[var(--bg-sidebar)] border-r border-[var(--border-subtle)] select-none">
-          {/* Workspace Brand & Track Switcher */}
-          <div className="p-3.5 border-b border-[var(--border-subtle)] space-y-2.5">
+        <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:sticky lg:top-0 lg:h-screen bg-[var(--bg-sidebar)] border-r border-[var(--border-subtle)] justify-between select-none">
+          <div className="p-4 space-y-5 overflow-y-auto">
+            {/* Brand Card */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="shrink-0 w-9 h-9 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => handleNavigate('dashboard')}
+                className="flex items-center gap-3 min-w-0 text-left cursor-pointer group"
+              >
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center shadow-2xs group-hover:border-[var(--kirby-pink)] transition">
                   <KirbyMascot
                     ability={
                       timerMode === 'tomato'
                         ? 'sleep'
                         : activeMicrotopic.copyAbility
                     }
-                    size={32}
+                    size={34}
                   />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <span className="font-bold text-sm text-[var(--text-primary)] truncate">
                       StudyMyLove
                     </span>
-                    <WarpStarIcon size={13} />
+                    <Heart className="w-3.5 h-3.5 text-[var(--kirby-pink)] fill-[var(--kirby-pink)] shrink-0" />
                   </div>
-                  <div className="text-[11px] text-[var(--text-muted)] truncate">
-                    {profile.studentName} • Engenharia & Petrobras
+                  <div className="text-[11px] text-[var(--text-secondary)] truncate">
+                    Para a {profile.studentName} • Engenharia
                   </div>
                 </div>
-              </div>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setSidebarCollapsed(true)}
-                title="Recolher barra lateral (Modo Foco)"
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] cursor-pointer"
+                title="Recolher menu lateral"
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] cursor-pointer"
               >
                 <PanelLeftClose className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Active Study Track Select */}
-            <div>
+            {/* Study Track Selector */}
+            <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-1.5">
               <label
                 htmlFor="sidebar-track-select"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]"
               >
-                Edital / Foco Ativo
+                Trilha de Estudo Ativa
               </label>
               <select
                 id="sidebar-track-select"
@@ -451,7 +457,7 @@ export function App() {
                     activeTrack: e.target.value as StudyTrack,
                   })
                 }
-                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-subtle)] focus:outline-none focus:border-[var(--kirby-pink)] cursor-pointer"
+                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)] focus:outline-none focus:border-[var(--kirby-pink)] cursor-pointer"
               >
                 {(Object.keys(TRACK_METADATA) as StudyTrack[]).map((tKey) => (
                   <option key={tKey} value={tKey}>
@@ -460,149 +466,77 @@ export function App() {
                 ))}
               </select>
             </div>
-          </div>
 
-          {/* Primary Navigation */}
-          <div className="p-2.5 space-y-0.5 border-b border-[var(--border-subtle)]">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const active = activeView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNavigate(item.id)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                    active
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold border border-[var(--border-subtle)] shadow-2xs'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]/60 hover:text-[var(--text-primary)] border border-transparent'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5 truncate">
-                    <Icon
-                      className={`w-4 h-4 shrink-0 ${
-                        active
-                          ? 'text-[var(--kirby-pink)]'
-                          : 'text-[var(--text-muted)]'
-                      }`}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </span>
-                  {item.id === 'auto-revisao' && trackStats.dueCards > 0 && (
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                      {trackStats.dueCards}
-                    </span>
-                  )}
-                  {item.id === 'exercicios' && (
-                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                      {ALL_QUESTIONS.length}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Direct Subject Tree (Notion / Obsidian / RemNote style) */}
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1">
-                <FolderOpen className="w-3 h-3" />
-                Matérias ({trackMicrotopics.length})
-              </span>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                {trackStats.readCount}/{trackStats.totalCount} lidas
-              </span>
-            </div>
-
-            <div className="space-y-1">
-              {PLANETS.map((planet) => {
-                const topics = trackMicrotopics.filter(
-                  (m) => m.planetId === planet.id
-                );
-                if (topics.length === 0) return null;
-                const isOpen = expandedPlanets[planet.id] ?? false;
-
-                return (
-                  <div key={planet.id} className="space-y-0.5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedPlanets((prev) => ({
-                          ...prev,
-                          [planet.id]: !isOpen,
-                        }))
-                      }
-                      className="w-full flex items-center justify-between px-2 py-1 rounded-md text-left text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]/50 cursor-pointer"
-                    >
-                      <span className="flex items-center gap-1.5 truncate">
-                        {isOpen ? (
-                          <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
-                        )}
-                        <span className="truncate">{planet.name}</span>
-                      </span>
-                      <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                        {topics.length}
-                      </span>
-                    </button>
-
-                    {isOpen && (
-                      <div className="pl-3.5 space-y-0.5 border-l border-[var(--border-subtle)] ml-2.5">
-                        {topics.map((mt) => {
-                          const prog = profile.microtopics[mt.id];
-                          const pKnown = prog?.pKnown ?? 0;
-                          const isSelected =
-                            profile.selectedMicrotopicId === mt.id &&
-                            activeView === 'biblioteca';
-                          const statusColor =
-                            pKnown >= 0.9
-                              ? 'bg-emerald-500'
-                              : pKnown >= 0.75
-                                ? 'bg-sky-500'
-                                : 'bg-rose-500';
-
-                          return (
-                            <button
-                              key={mt.id}
-                              type="button"
-                              onClick={() => handleNavigate('biblioteca', mt.id)}
-                              title={`${mt.code} — ${mt.title}`}
-                              className={`w-full flex items-center justify-between gap-1.5 px-2 py-1 rounded-md text-left text-[11px] transition cursor-pointer ${
-                                isSelected
-                                  ? 'bg-[var(--kirby-pink-soft)] text-[var(--text-primary)] font-semibold'
-                                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]/60 hover:text-[var(--text-primary)]'
-                              }`}
-                            >
-                              <span className="truncate flex items-center gap-1.5">
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor}`}
-                                />
-                                <span className="font-mono text-[10px] font-semibold text-[var(--text-muted)]">
-                                  {mt.code}
-                                </span>
-                                <span className="truncate">{mt.title}</span>
-                              </span>
-                              {prog?.readingCompleted && (
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+            {/* Clean Grouped Navigation */}
+            <nav className="space-y-5" aria-label="Menu Principal">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.groupLabel} className="space-y-1">
+                  <div className="px-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    {group.groupLabel}
                   </div>
-                );
-              })}
-            </div>
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = activeView === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleNavigate(item.id)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
+                          active
+                            ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold border border-[var(--border-strong)] shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]/60 hover:text-[var(--text-primary)] border border-transparent'
+                        }`}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                              active
+                                ? 'bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]'
+                                : 'bg-[var(--bg-surface)] text-[var(--text-muted)]'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">
+                              {item.label}
+                            </span>
+                            <span className="block text-[10px] text-[var(--text-muted)] truncate">
+                              {item.subtitle}
+                            </span>
+                          </span>
+                        </span>
+                        {item.id === 'auto-revisao' && trackStats.dueCards > 0 && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)] shrink-0">
+                            {trackStats.dueCards}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
           </div>
 
-          {/* Sidebar Footer: Kirby Theme Switcher & Compact Status */}
-          <div className="p-3 border-t border-[var(--border-subtle)] space-y-2.5 bg-[var(--bg-sidebar)]">
+          {/* Sidebar Footer: Help Guide, Theme Switcher & Summary */}
+          <div className="p-4 border-t border-[var(--border-subtle)] space-y-3 bg-[var(--bg-sidebar)]">
+            <button
+              type="button"
+              onClick={() => setTutorialModalOpen(true)}
+              className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)] flex items-center justify-between transition cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-[var(--kirby-pink)]" />
+                <span>Como Usar (Tutorial)</span>
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)]">Guia</span>
+            </button>
+
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                Tema Kirby
+              <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                Tema Visual
               </span>
               <div className="inline-flex rounded-lg p-0.5 bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
                 {(
@@ -618,7 +552,7 @@ export function App() {
                       key={t.id}
                       type="button"
                       onClick={() => setTheme(t.id)}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition cursor-pointer ${
                         active
                           ? 'bg-[var(--kirby-pink)] text-white'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -631,12 +565,13 @@ export function App() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-secondary)] pt-1 border-t border-[var(--border-subtle)]">
-              <span>θ̂ = {trackStats.avgTheta}</span>
+            <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-secondary)] pt-2 border-t border-[var(--border-subtle)]">
+              <span className="flex items-center gap-1">
+                <WarpStarIcon size={13} />
+                {trackStats.readCount}/{trackStats.totalCount} lidas
+              </span>
               <span>•</span>
               <span>Domínio {trackStats.avgPct}%</span>
-              <span>•</span>
-              <span>★ {trackStats.masteredCount}/28</span>
             </div>
           </div>
         </aside>
@@ -644,61 +579,63 @@ export function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top Console / Study Status Bar (Desktop & Tablet) */}
-        <div className="sticky top-0 z-30 bg-[var(--bg-surface)]/95 backdrop-blur-xs border-b border-[var(--border-subtle)] px-4 lg:px-6 h-12 flex items-center justify-between gap-3">
-          {/* Left: Sidebar Toggle + Breadcrumb */}
-          <div className="flex items-center gap-2.5 min-w-0">
+        {/* Clean, Balanced Top Bar */}
+        <header className="sticky top-0 z-30 bg-[var(--bg-surface)]/95 backdrop-blur-xs border-b border-[var(--border-subtle)] px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          {/* Left: Sidebar Toggle + Clean Location Breadcrumb */}
+          <div className="flex items-center gap-3 min-w-0">
             {sidebarCollapsed && (
               <button
                 type="button"
                 onClick={() => setSidebarCollapsed(false)}
-                title="Mostrar barra lateral"
-                className="hidden lg:inline-flex p-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                title="Mostrar menu lateral"
+                className="hidden lg:inline-flex p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               >
                 <PanelLeftOpen className="w-4 h-4" />
               </button>
             )}
 
-            <div className="flex items-center gap-1.5 text-xs min-w-0">
-              <span className="font-semibold text-[var(--text-secondary)] shrink-0">
+            <div className="flex items-center gap-2 text-xs sm:text-sm min-w-0">
+              <span className="font-bold text-[var(--text-primary)] shrink-0">
                 {currentViewLabel}
               </span>
-              <span className="text-[var(--text-muted)]">/</span>
+              <span className="text-[var(--text-muted)] hidden sm:inline">•</span>
               <button
                 type="button"
                 onClick={() => handleNavigate('biblioteca', activeMicrotopic.id)}
-                className="font-mono font-bold text-[var(--kirby-pink)] hover:underline shrink-0 cursor-pointer"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-xs transition cursor-pointer max-w-xs md:max-w-md"
+                title="Ir para a matéria selecionada"
               >
-                {activeMicrotopic.code}
+                <span className="font-mono font-bold text-[var(--kirby-pink)] shrink-0">
+                  {activeMicrotopic.code}
+                </span>
+                <span className="text-[var(--text-secondary)] truncate">
+                  {activeMicrotopic.title}
+                </span>
               </button>
-              <span className="text-[var(--text-primary)] font-medium truncate hidden sm:inline">
-                {activeMicrotopic.title}
-              </span>
-              <span className="hidden xl:inline-flex ml-1">
+              <span className="hidden xl:inline-flex">
                 <CopyAbilityBadge ability={activeMicrotopic.copyAbility} size="sm" />
               </span>
             </div>
           </div>
 
-          {/* Center: Quick Content Search Trigger (Ctrl+K) */}
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="hidden md:flex items-center justify-between gap-4 px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-xs text-[var(--text-muted)] w-64 lg:w-80 transition cursor-pointer"
-          >
-            <span className="flex items-center gap-2 truncate">
-              <Search className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Buscar matéria, norma, fórmula...</span>
-            </span>
-            <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-              Ctrl K
-            </kbd>
-          </button>
+          {/* Right: Quick Search + Persistent Timer + Tutorial Button */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="hidden md:flex items-center justify-between gap-4 px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-xs text-[var(--text-muted)] w-56 lg:w-64 transition cursor-pointer"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Search className="w-3.5 h-3.5 shrink-0 text-[var(--kirby-pink)]" />
+                <span className="truncate">Buscar matéria ou norma...</span>
+              </span>
+              <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                Ctrl K
+              </kbd>
+            </button>
 
-          {/* Right: Console Timer & Vitality Bar */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Persistent Mini Focus / Maxim Tomato Timer */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs">
+            {/* Persistent Focus / Break Timer */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs">
               {timerMode === 'tomato' ? (
                 <MaximTomatoIcon size={15} />
               ) : (
@@ -710,7 +647,7 @@ export function App() {
               <button
                 type="button"
                 onClick={() => setTimerRunning((r) => !r)}
-                title={timerRunning ? 'Pausar timer' : 'Iniciar timer de estudo'}
+                title={timerRunning ? 'Pausar timer' : 'Iniciar timer'}
                 className="p-0.5 rounded hover:bg-[var(--bg-subtle)] text-[var(--text-primary)] cursor-pointer"
               >
                 {timerRunning ? (
@@ -738,38 +675,32 @@ export function App() {
                   setTimerRunning(false);
                   setTimerSeconds(nextMode === 'tomato' ? 15 * 60 : 50 * 60);
                 }}
-                title="Alternar Foco (50m) / Pausa Maxim Tomato (15m)"
-                className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hidden sm:inline"
+                className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hidden sm:inline"
               >
                 {timerMode === 'focus' ? 'Pausa 15m' : 'Foco 50m'}
               </button>
             </div>
 
-            {/* Daily Stamina / Hours Indicator */}
             <button
               type="button"
-              onClick={() => handleNavigate('rotina')}
-              title="Ver Cronograma Diário"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-mono cursor-pointer"
+              onClick={() => setTutorialModalOpen(true)}
+              title="Abrir tutorial de como usar"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--kirby-pink-soft)] hover:brightness-95 text-[var(--kirby-pink)] text-xs font-semibold cursor-pointer"
             >
-              <WarpStarIcon size={14} />
-              <span className="font-semibold text-[var(--text-primary)]">
-                {(profile.totalMinutesStudied / 60).toFixed(1)}h
-              </span>
-              <span className="text-[var(--text-muted)]">
-                / {profile.dailyGoalHours}h
-              </span>
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>Como Usar</span>
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Active View Content */}
-        <div className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full">
+        {/* Centered, Breathable Active Workspace */}
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-5xl mx-auto w-full">
           {activeView === 'dashboard' && (
             <DashboardView
               profile={profile}
               onUpdateProfile={handleUpdateProfile}
               onNavigate={handleNavigate}
+              onOpenTutorialModal={() => setTutorialModalOpen(true)}
             />
           )}
           {activeView === 'rotina' && (
@@ -818,8 +749,167 @@ export function App() {
               onNavigate={handleNavigate}
             />
           )}
-        </div>
+        </main>
       </div>
+
+      {/* Global Tutorial Modal ("Como Usar o StudyMyLove") */}
+      {tutorialModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setTutorialModalOpen(false)}
+        >
+          <div
+            className="dream-card max-w-3xl w-full max-h-[88vh] overflow-y-auto p-6 sm:p-8 space-y-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-[var(--kirby-pink-soft)] flex items-center justify-center shrink-0">
+                  <KirbyMascot ability="scholar" size={38} />
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
+                    Guia Passo a Passo
+                  </span>
+                  <h2 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
+                    Como Usar o StudyMyLove no seu Dia a Dia
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTutorialModalOpen(false)}
+                className="p-1.5 rounded-lg bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink)] text-white">
+                    Passo 1
+                  </span>
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    Organização Diária
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Escolha sua Trilha e siga o Cronograma
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  No menu lateral esquerdo, escolha se quer focar no <strong>Modo Integrado (Mecânica + Elétrica)</strong>, só <strong>Mecânica</strong>, só <strong>Elétrica</strong> ou <strong>Concursos Gerais</strong>. Em <strong>Cronograma 6–8h</strong>, marque os blocos concluídos e use o botão <em>Pausa 15m (Maxim Tomato)</em> no topo para descansar a vista.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTutorialModalOpen(false);
+                    handleNavigate('rotina');
+                  }}
+                  className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline cursor-pointer pt-1 inline-block"
+                >
+                  Abrir Cronograma 6–8h →
+                </button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink)] text-white">
+                    Passo 2
+                  </span>
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    Estudo da Matéria
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Estude no Caderno, Formulário e Simuladores
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Em <strong>Caderno & Teoria</strong>, cada uma das 28 matérias é dividida em abas limpas: <strong>Teoria Completa</strong>, <strong>Formulário</strong> (todas as equações reunidas), <strong>Simulador Interativo</strong> (11 laboratórios gráficos), <strong>Videoaulas</strong> (player sem distrações) e <strong>Minhas Anotações</strong> (salvas automaticamente).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTutorialModalOpen(false);
+                    handleNavigate('biblioteca');
+                  }}
+                  className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline cursor-pointer pt-1 inline-block"
+                >
+                  Abrir Caderno & Teoria →
+                </button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink)] text-white">
+                    Passo 3
+                  </span>
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    Fixação & Cálculos
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Resolva Questões com Folha de Rascunho
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Em <strong>Banco de Questões</strong>, filtre por matéria ou banca (Cesgranrio, Cebraspe, FGV, Marinha). Use o botão <strong>Rascunho de Cálculo</strong> para anotar suas contas. Ao errar uma questão, clique no motivo do erro (<em>Conceito, Cálculo, Norma ou Interpretação</em>) para o sistema ajustar suas prioridades.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTutorialModalOpen(false);
+                    handleNavigate('exercicios');
+                  }}
+                  className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline cursor-pointer pt-1 inline-block"
+                >
+                  Ir para o Banco de Questões →
+                </button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink)] text-white">
+                    Passo 4
+                  </span>
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    Memória de Longo Prazo
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Flashcards FSRS, Simulados e Busca (Ctrl+K)
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Todo dia pela manhã, revise os <strong>Flashcards FSRS</strong> vencidos (use <code>Espaço</code> para virar e <code>1</code> a <code>4</code> para avaliar). À tarde, faça um <strong>Simulado de Banca</strong> cronometrado. E a qualquer momento, aperte <code>Ctrl + K</code> para procurar qualquer norma (ex: <em>NR-13, API 610</em>) ou equação!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTutorialModalOpen(false);
+                    handleNavigate('auto-revisao');
+                  }}
+                  className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline cursor-pointer pt-1 inline-block"
+                >
+                  Abrir Flashcards FSRS →
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)] text-xs text-[var(--text-secondary)]">
+              <span>
+                Dica: Todos os seus dados e anotações ficam salvos automaticamente no seu navegador (e você pode exportar backup JSON na aba Edital & Progresso).
+              </span>
+              <button
+                type="button"
+                onClick={() => setTutorialModalOpen(false)}
+                className="dream-btn-primary px-4 py-2 text-xs shrink-0 cursor-pointer"
+              >
+                Entendi, vamos estudar!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Quick Search Modal (Ctrl+K) */}
       {searchOpen && (

@@ -4,9 +4,14 @@ import {
   BookOpen,
   Brain,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Clock,
   FileCode2,
+  Heart,
+  HelpCircle,
+  Layers,
   Search,
   Swords,
   Zap,
@@ -34,7 +39,6 @@ import {
   MaximTomatoIcon,
   WarpStarIcon,
 } from '../KirbyArtwork';
-import { MathBlock } from '../MathMarkdown';
 
 export type AppViewId =
   | 'dashboard'
@@ -49,13 +53,45 @@ interface DashboardViewProps {
   profile: UserStudyProfile;
   onUpdateProfile: (next: UserStudyProfile) => void;
   onNavigate: (view: AppViewId, microtopicId?: string) => void;
+  onOpenTutorialModal?: () => void;
 }
+
+const LOVE_NOTES: Array<{ title: string; message: string }> = [
+  {
+    title: 'Para o meu amor, Thaisa ♥',
+    message:
+      'Criei o StudyMyLove inteirinho pensando em você. Eu te amo demais e tenho um orgulho imenso da mulher dedicada, inteligente e incrível que você é. Quis reunir tudo dos seus estudos de Engenharia e da Petrobras em um ambiente calmo, limpo e confortável — para deixar a sua rotina mais leve e te lembrar todos os dias do quanto eu acredito em você.',
+  },
+  {
+    title: 'Meu orgulho diário ♥',
+    message:
+      'Cada equação deduzida, cada norma revisada e cada questão resolvida aqui dentro é mais um passo rumo à sua aprovação. Você é brilhante, meu amor. Estude no seu ritmo, com tranquilidade no coração, porque eu estou sempre ao seu lado torcendo por cada conquista sua!',
+  },
+  {
+    title: 'Cuide de você enquanto estuda ♥',
+    message:
+      'Não esqueça de beber água, alongar os ombros e fazer suas pausas Maxim Tomato! A sua saúde e o seu bem-estar vêm sempre em primeiro lugar. Eu te amo daqui até Dream Land, minha engenheira favorita ♥',
+  },
+  {
+    title: 'Você nasceu para brilhar ♥',
+    message:
+      'Quando algum tema parecer difícil, respire fundo e lembre-se de tudo o que você já superou na Engenharia. Você tem uma mente admirável e uma força linda. Te amo infinitamente!',
+  },
+];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   profile,
   onUpdateProfile,
   onNavigate,
+  onOpenTutorialModal,
 }) => {
+  const [loveNoteIdx, setLoveNoteIdx] = useState(0);
+  const [loveCardExpanded, setLoveCardExpanded] = useState(true);
+  const [tutorialVisible, setTutorialVisible] = useState(true);
+
+  const [bottomSectionTab, setBottomSectionTab] = useState<
+    'materias' | 'cronograma' | 'normas'
+  >('materias');
   const [areaTab, setAreaTab] = useState<'all' | 'priority' | MacroArea>('all');
   const [topicFilter, setTopicFilter] = useState('');
 
@@ -115,7 +151,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     };
   }, [diagnostics]);
 
-  // All technical norms mapped to their microtopic for instant content lookup
   const normsIndex = useMemo(() => {
     const list: Array<{ norm: string; mtId: string; code: string; title: string }> = [];
     const seen = new Set<string>();
@@ -185,312 +220,461 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
   }, [diagnostics, areaTab, topicFilter]);
 
-  const firstEquationOfTopFocus =
-    topFocus?.mt.compendium[0]?.keyEquations[0] ?? null;
+  const currentLoveNote = LOVE_NOTES[loveNoteIdx % LOVE_NOTES.length];
 
   return (
-    <div className="space-y-6">
-      {/* Compact Console Header Bar */}
-      <section className="dream-card p-4 sm:p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-8">
+      {/* 1. DEDICATÓRIA DE AMOR NA PÁGINA INICIAL */}
+      <section className="dream-card p-6 sm:p-7 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="shrink-0 w-12 h-12 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex items-center justify-center">
-              <KirbyMascot
-                ability={topFocus ? topFocus.mt.copyAbility : 'scholar'}
-                size={42}
-              />
+            <div className="w-14 h-14 rounded-2xl bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] flex items-center justify-center shrink-0">
+              <KirbyMascot ability="classic" size={48} />
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
-                  StudyMyLove • {profile.studentName}
-                </h1>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-                  {profile.university}
-                </span>
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--kirby-pink)]">
+                <Heart className="w-3.5 h-3.5 fill-[var(--kirby-pink)]" />
+                <span>Feito com todo amor para você</span>
               </div>
-              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                Dia {profile.dayParity === 'odd' ? 'Ímpar (Português no Bloco Básico)' : 'Par (Inglês Técnico ASME/API no Bloco Básico)'} • Meta {profile.dailyGoalHours}h/dia
+              <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mt-0.5">
+                {currentLoveNote.title}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setLoveNoteIdx((i) => (i + 1) % LOVE_NOTES.length)}
+              className="px-3 py-1.5 rounded-lg bg-[var(--kirby-pink-soft)] hover:brightness-95 text-[var(--kirby-pink)] text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Heart className="w-3.5 h-3.5 fill-[var(--kirby-pink)]" />
+              Outra mensagem ({loveNoteIdx + 1}/{LOVE_NOTES.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoveCardExpanded((e) => !e)}
+              title={loveCardExpanded ? 'Recolher mensagem' : 'Expandir mensagem'}
+              className="p-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+            >
+              {loveCardExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {loveCardExpanded && (
+          <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] space-y-4">
+            <p className="text-sm sm:text-[15px] text-[var(--text-secondary)] leading-relaxed max-w-3xl">
+              {currentLoveNote.message}
+            </p>
+
+            {/* Clean Track Selector Strip */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <div className="text-xs font-semibold text-[var(--text-muted)]">
+                Foco atual dos seus estudos:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(TRACK_METADATA) as StudyTrack[]).map((trackKey) => {
+                  const meta = TRACK_METADATA[trackKey];
+                  const active = profile.activeTrack === trackKey;
+                  return (
+                    <button
+                      key={trackKey}
+                      type="button"
+                      onClick={() => handleTrackChange(trackKey)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        active
+                          ? 'bg-[var(--kirby-pink)] text-white shadow-2xs'
+                          : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      {meta.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* 2. TUTORIAL PASSO A PASSO DE COMO USAR */}
+      <section className="dream-card p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)] flex items-center justify-center">
+              <HelpCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[var(--text-primary)]">
+                Como Usar o StudyMyLove (Guia Rápido)
+              </h2>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Siga estes 4 passos simples na sua rotina diária de estudos:
               </p>
             </div>
           </div>
 
-          {/* Track Switcher Tabs (Console Pill Style) */}
-          <div className="flex flex-wrap gap-1.5 bg-[var(--bg-elevated)] p-1 rounded-xl border border-[var(--border-subtle)]">
-            {(Object.keys(TRACK_METADATA) as StudyTrack[]).map((trackKey) => {
-              const meta = TRACK_METADATA[trackKey];
-              const active = profile.activeTrack === trackKey;
-              return (
-                <button
-                  key={trackKey}
-                  type="button"
-                  onClick={() => handleTrackChange(trackKey)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    active
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border-strong)]'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {meta.badge}
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            {onOpenTutorialModal && (
+              <button
+                type="button"
+                onClick={onOpenTutorialModal}
+                className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline cursor-pointer"
+              >
+                Ver guia detalhado
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setTutorialVisible((v) => !v)}
+              className="px-2.5 py-1 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+            >
+              {tutorialVisible ? 'Ocultar' : 'Mostrar Passos'}
+            </button>
           </div>
         </div>
 
-        {/* 4 Clean Status Cells */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-[var(--border-subtle)]">
-          <button
-            type="button"
-            onClick={() => onNavigate('biblioteca')}
-            className="text-left p-3 rounded-lg bg-[var(--bg-elevated)] hover:border-[var(--border-strong)] border border-[var(--border-subtle)] transition cursor-pointer"
-          >
-            <div className="text-[11px] text-[var(--text-secondary)] font-medium">
-              Teoria & Compêndio
+        {tutorialVisible && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+            <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                  01 • Rotina & Timer
+                </span>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Planeje o seu Dia
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Siga os blocos do <strong>Cronograma 6–8h</strong> e use o timer do topo com pausas <em>Maxim Tomato</em> (15 min) para descansar a vista.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('rotina')}
+                className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                Abrir Cronograma <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                {stats.readDone}/{stats.total}
-              </span>
-              <span className="text-[11px] font-mono text-[var(--kirby-pink)]">
-                matérias lidas →
-              </span>
-            </div>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => onNavigate('auto-revisao')}
-            className="text-left p-3 rounded-lg bg-[var(--bg-elevated)] hover:border-[var(--border-strong)] border border-[var(--border-subtle)] transition cursor-pointer"
-          >
-            <div className="text-[11px] text-[var(--text-secondary)] font-medium">
-              Flashcards para Hoje
+            <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                  02 • Teoria & Notas
+                </span>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Estude no Caderno
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Abra qualquer uma das <strong>28 matérias</strong> para ler a teoria, ver o <strong>Formulário</strong> de equações, usar os simuladores, assistir aulas e anotar.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('biblioteca')}
+                className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                Abrir Caderno & Teoria <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                {dueFlashcardsCount}
-              </span>
-              <span className="text-[11px] font-mono text-[var(--warp-gold)] font-semibold">
-                revisar agora →
-              </span>
-            </div>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => onNavigate('exercicios')}
-            className="text-left p-3 rounded-lg bg-[var(--bg-elevated)] hover:border-[var(--border-strong)] border border-[var(--border-subtle)] transition cursor-pointer"
-          >
-            <div className="text-[11px] text-[var(--text-secondary)] font-medium">
-              Banco de Questões
+            <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                  03 • Prática Ativa
+                </span>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Resolva Questões
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Treine nas <strong>56 questões comentadas</strong> usando a folha de rascunho. Quando errar, marque o motivo para calibrar sua revisão.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('exercicios')}
+                className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                Banco de Questões <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                {stats.solvedQuestions}/{ALL_QUESTIONS.length}
-              </span>
-              <span className="text-[11px] font-mono text-[var(--sky-info)]">
-                praticar →
-              </span>
-            </div>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => onNavigate('matriz')}
-            className="text-left p-3 rounded-lg bg-[var(--bg-elevated)] hover:border-[var(--border-strong)] border border-[var(--border-subtle)] transition cursor-pointer"
-          >
-            <div className="text-[11px] text-[var(--text-secondary)] font-medium">
-              Domínio do Edital
+            <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                  04 • Revisão & Provas
+                </span>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  Flashcards & Simulados
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Revise os <strong>Flashcards FSRS</strong> vencidos (teclas <code>Espaço</code> e <code>1–4</code>) e teste seu tempo nos <strong>Simulados de Banca</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('auto-revisao')}
+                className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                Revisar Flashcards <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                {stats.avgPKnownPct}%
-              </span>
-              <span className="text-[11px] font-mono text-[var(--text-secondary)]">
-                ★ {stats.mastered}/{stats.total} (θ̂ {stats.avgTheta})
-              </span>
-            </div>
-          </button>
-        </div>
+          </div>
+        )}
       </section>
 
-      {/* Main Two-Column Personal Study Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left/Center Column (8/12): Content Focus & Full Curriculum Directory */}
-        <div className="lg:col-span-8 space-y-6">
-          {/* Active Subject Content Preview (Concrete Content, Not Meta-Blurb!) */}
+      {/* 3. PAINEL DE HOJE — 3 CARTÕES SIMÉTRICOS E BEM POSICIONADOS */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <WarpStarIcon size={18} />
+            <span>Seu Foco de Hoje</span>
+          </h2>
+          <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-[var(--text-secondary)]">
+            <span>
+              Matérias lidas: <strong>{stats.readDone}/{stats.total}</strong>
+            </span>
+            <span>•</span>
+            <span>
+              Questões: <strong>{stats.solvedQuestions}/{ALL_QUESTIONS.length}</strong>
+            </span>
+            <span>•</span>
+            <span>
+              Domínio médio: <strong>{stats.avgPKnownPct}%</strong> (θ̂ {stats.avgTheta})
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Card 1: Priority Subject */}
           {topFocus && (
-            <section className="dream-card p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-3">
-                <div className="flex items-center gap-2">
+            <div className="dream-card p-5 flex flex-col justify-between space-y-4">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
-                    Matéria Prioritária de Hoje
+                    Matéria Recomendada
                   </span>
-                  <span className="text-[var(--text-muted)]">•</span>
                   <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
                     {topFocus.mt.code}
                   </span>
-                  <CopyAbilityBadge ability={topFocus.mt.copyAbility} showLabel />
                 </div>
-                <span className="text-xs font-mono text-[var(--text-secondary)]">
-                  Domínio {(topFocus.prog.pKnown * 100).toFixed(0)}% • Retenção{' '}
-                  {topFocus.diag.projectedRetention.toFixed(0)}%
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                <h2 className="text-lg font-bold text-[var(--text-primary)]">
+                <h3 className="text-base font-bold text-[var(--text-primary)] leading-snug">
                   {topFocus.mt.title}
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] line-clamp-3 leading-relaxed">
                   {topFocus.mt.summary}
                 </p>
-
-                {/* Concrete Syllabus Sections & Norms */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  <div className="p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                      Tópicos do Compêndio ({topFocus.mt.compendium.length} seções)
-                    </div>
-                    <ul className="space-y-1 text-xs text-[var(--text-primary)]">
-                      {topFocus.mt.compendium.map((sec, idx) => (
-                        <li key={sec.id} className="truncate">
-                          <span className="font-mono text-[var(--kirby-pink)] font-bold mr-1.5">
-                            {idx + 1}.
-                          </span>
-                          {sec.title}
-                        </li>
-                      ))}
-                    </ul>
+                { nextPriorities.length > 0 && (
+                  <div className="pt-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+                    <span>Próximas:</span>
+                    {nextPriorities.map((item) => (
+                      <button
+                        key={item.mt.id}
+                        type="button"
+                        onClick={() => onNavigate('biblioteca', item.mt.id)}
+                        className="font-mono font-semibold px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] hover:text-[var(--kirby-pink)] border border-[var(--border-subtle)] cursor-pointer"
+                      >
+                        {item.mt.code}
+                      </button>
+                    ))}
                   </div>
-
-                  {firstEquationOfTopFocus ? (
-                    <div className="p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] overflow-x-auto">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                        Equação-Chave: {firstEquationOfTopFocus.label}
-                      </div>
-                      <div className="text-xs">
-                        <MathBlock latex={firstEquationOfTopFocus.latex} display={false} />
-                      </div>
-                      {topFocus.mt.norms.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-[var(--border-subtle)] flex flex-wrap gap-1">
-                          {topFocus.mt.norms.map((n) => (
-                            <span
-                              key={n}
-                              className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)]"
-                            >
-                              {n}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
+                )}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border-subtle)]">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('biblioteca', topFocus.mt.id)}
-                    className="dream-btn-primary px-3.5 py-1.5 text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    Estudar Teoria & Fórmulas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('exercicios', topFocus.mt.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
-                    Resolver Questões
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('auto-revisao', topFocus.mt.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Brain className="w-3.5 h-3.5 text-[var(--warp-gold)]" />
-                    Flashcards do Tema
-                  </button>
-                </div>
-
-                {/* Next 3 in queue */}
-                <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
-                  <span className="text-[var(--text-muted)]">A seguir:</span>
-                  {nextPriorities.map((item) => (
-                    <button
-                      key={item.mt.id}
-                      type="button"
-                      onClick={() => onNavigate('biblioteca', item.mt.id)}
-                      title={item.mt.title}
-                      className="font-mono font-semibold px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] cursor-pointer"
-                    >
-                      {item.mt.code}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Structured Curriculum Directory (All 28 Subjects with Direct Content Links) */}
-          <section className="dream-card overflow-hidden">
-            <div className="p-4 border-b border-[var(--border-subtle)] space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <WarpStarIcon size={18} />
-                    Caderno de Matérias do Edital ({filteredDiagnostics.length})
-                  </h2>
-                  <p className="text-xs text-[var(--text-secondary)]">
-                    Acesso direto à teoria, equações, normas técnicas, questões e flashcards de cada matéria.
-                  </p>
-                </div>
-
-                <div className="relative w-full sm:w-56">
-                  <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-2.5" />
-                  <input
-                    type="text"
-                    value={topicFilter}
-                    onChange={(e) => setTopicFilter(e.target.value)}
-                    placeholder="Filtrar matéria ou norma..."
-                    className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
-                  />
-                </div>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="flex flex-wrap gap-1">
-                {(
-                  [
-                    ['all', `Todas (${trackMicrotopics.length})`],
-                    ['priority', 'Para Revisar (<85%)'],
-                    ['mec', 'Mecânica'],
-                    ['ele', 'Elétrica'],
-                    ['multi', 'Controle & Mat.'],
-                    ['basico', 'Português & Inglês'],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setAreaTab(key)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
-                      areaTab === key
-                        ? 'bg-[var(--kirby-pink)] text-white'
-                        : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 pt-3 border-t border-[var(--border-subtle)]">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('biblioteca', topFocus.mt.id)}
+                  className="dream-btn-primary flex-1 py-2 text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Estudar Teoria
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('exercicios', topFocus.mt.id)}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+                  Questões
+                </button>
               </div>
             </div>
+          )}
 
-            {/* Grouped Subject List */}
+          {/* Card 2: Flashcards Due Today */}
+          <div className="dream-card p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--warp-gold)]">
+                  Repetição Espaçada (FSRS)
+                </span>
+                <Brain className="w-4 h-4 text-[var(--warp-gold)]" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold font-mono text-[var(--text-primary)]">
+                  {dueFlashcardsCount}
+                </span>
+                <span className="text-xs text-[var(--text-secondary)]">
+                  cartões para revisar hoje
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Revisão rápida de 15 minutos pela manhã para manter a retenção das equações e normas acima de 90%.
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigate('auto-revisao')}
+                className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Brain className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+                Iniciar Revisão de Cartões
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Daily Schedule & Simulados */}
+          <div className="dream-card p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--sky-info)]">
+                  Meta & Ritmo do Dia
+                </span>
+                <Clock className="w-4 h-4 text-[var(--sky-info)]" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold font-mono text-[var(--text-primary)]">
+                  {profile.completedRoutineBlocksToday.length}/
+                  {DAILY_ROUTINE_TEMPLATE.length}
+                </span>
+                <span className="text-xs text-[var(--text-secondary)]">
+                  blocos concluídos hoje
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Hoje é <strong>Dia {profile.dayParity === 'odd' ? 'Ímpar (Português)' : 'Par (Inglês Técnico)'}</strong> no Bloco Básico. Meta diária configurada em {profile.dailyGoalHours}h.
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigate('rotina')}
+                className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Clock className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+                Ver Rotina
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('simulados')}
+                className="py-2 px-3 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] inline-flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <Swords className="w-3.5 h-3.5" />
+                Simulado
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. DIRETÓRIO CENTRAL BEM POSICIONADO (ABAS: MATÉRIAS | CRONOGRAMA | NORMAS) */}
+      <section className="dream-card overflow-hidden">
+        {/* Clean Section Switcher Header */}
+        <div className="p-5 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-1.5 bg-[var(--bg-elevated)] p-1 rounded-xl border border-[var(--border-subtle)]">
+            <button
+              type="button"
+              onClick={() => setBottomSectionTab('materias')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                bottomSectionTab === 'materias'
+                  ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border-strong)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+              Matérias por Área ({trackMicrotopics.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBottomSectionTab('cronograma')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                bottomSectionTab === 'cronograma'
+                  ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border-strong)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+              Checklist de Hoje ({profile.completedRoutineBlocksToday.length}/10)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBottomSectionTab('normas')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                bottomSectionTab === 'normas'
+                  ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border-strong)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <FileCode2 className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+              Normas Técnicas ({normsIndex.length})
+            </button>
+          </div>
+
+          {bottomSectionTab === 'materias' && (
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={topicFilter}
+                onChange={(e) => setTopicFilter(e.target.value)}
+                placeholder="Buscar matéria, código ou norma..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ABA 1: MATÉRIAS POR ÁREA */}
+        {bottomSectionTab === 'materias' && (
+          <div>
+            {/* Filter Pills */}
+            <div className="px-5 py-3 bg-[var(--bg-elevated)]/50 border-b border-[var(--border-subtle)] flex flex-wrap gap-1.5">
+              {(
+                [
+                  ['all', `Todas (${trackMicrotopics.length})`],
+                  ['priority', 'Prioritárias (<85%)'],
+                  ['mec', 'Mecânica'],
+                  ['ele', 'Elétrica'],
+                  ['multi', 'Controle & Mat.'],
+                  ['basico', 'Português & Inglês'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAreaTab(key)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    areaTab === key
+                      ? 'bg-[var(--kirby-pink)] text-white'
+                      : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="divide-y divide-[var(--border-subtle)]">
               {PLANETS.map((planet) => {
                 const items = filteredDiagnostics.filter(
@@ -500,21 +684,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                 return (
                   <div key={planet.id}>
-                    {/* Area Subheader */}
-                    <div className="px-4 py-2 bg-[var(--bg-elevated)] flex items-center justify-between gap-2 text-xs">
+                    <div className="px-5 py-2.5 bg-[var(--bg-elevated)] flex items-center justify-between gap-2 text-xs">
                       <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
                         <CopyAbilityBadge ability={planet.copyAbility} />
                         <span>{planet.name}</span>
-                        <span className="text-[11px] font-normal text-[var(--text-muted)] hidden sm:inline">
-                          • {planet.kirbyWorldName}
-                        </span>
                       </div>
                       <span className="text-[11px] font-mono text-[var(--text-secondary)]">
                         {planet.areaLabel}
                       </span>
                     </div>
 
-                    {/* Subject Rows */}
                     <div className="divide-y divide-[var(--border-subtle)]">
                       {items.map(({ mt, prog }) => {
                         const eqCount = mt.compendium.reduce(
@@ -529,7 +708,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         return (
                           <div
                             key={mt.id}
-                            className="p-3.5 sm:px-4 hover:bg-[var(--bg-elevated)]/60 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                            className="p-4 sm:px-5 hover:bg-[var(--bg-elevated)]/50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                           >
                             <div className="min-w-0 flex-1 space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -539,28 +718,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => onNavigate('biblioteca', mt.id)}
-                                  className="text-left text-xs sm:text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--kirby-pink)] transition cursor-pointer"
+                                  className="text-left text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--kirby-pink)] transition cursor-pointer"
                                 >
                                   {mt.title}
                                 </button>
                                 {prog.readingCompleted && (
-                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
                                     ✓ Lido
                                   </span>
                                 )}
                               </div>
 
-                              {/* Concrete Content Metadata */}
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-secondary)]">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]">
                                 <span>{mt.compendium.length} seções</span>
                                 <span>•</span>
-                                <span>{eqCount} fórmulas</span>
+                                <span>{eqCount} equações</span>
                                 <span>•</span>
                                 <span>{mt.videos.length} aulas</span>
                                 {mt.norms.length > 0 && (
                                   <>
                                     <span>•</span>
-                                    <span className="font-mono text-[10px] text-[var(--text-primary)]">
+                                    <span className="font-mono text-[11px] text-[var(--text-primary)]">
                                       {mt.norms.slice(0, 3).join(', ')}
                                     </span>
                                   </>
@@ -568,13 +746,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               </div>
                             </div>
 
-                            {/* Right Actions & Mastery Bar */}
-                            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                              <div className="w-20 text-right">
-                                <div className="text-[11px] font-mono font-semibold text-[var(--text-primary)]">
-                                  {pct}%
+                            <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                              <div className="w-24 text-right">
+                                <div className="text-xs font-mono font-semibold text-[var(--text-primary)]">
+                                  {pct}% domínio
                                 </div>
-                                <div className="w-full h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden mt-0.5">
+                                <div className="w-full h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden mt-1">
                                   <div
                                     className="h-full rounded-full"
                                     style={{
@@ -590,21 +767,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => onNavigate('biblioteca', mt.id)}
-                                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-[var(--bg-surface)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] cursor-pointer"
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-surface)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] cursor-pointer"
                                 >
                                   Teoria
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => onNavigate('exercicios', mt.id)}
-                                  className="px-2 py-1 rounded-md text-xs font-mono font-semibold bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] cursor-pointer"
-                                  title="Resolver questões desta matéria"
+                                  className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] cursor-pointer"
                                 >
-                                  Q({qCount})
+                                  Questões ({qCount})
                                 </button>
                               </div>
                             </div>
@@ -616,140 +792,105 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 );
               })}
             </div>
-          </section>
-        </div>
+          </div>
+        )}
 
-        {/* Right Column (4/12): Today's Schedule Checklist & Technical Norms Index */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Interactive Daily Routine Checklist */}
-          <section className="dream-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[var(--kirby-pink)]" />
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">
-                  Cronograma de Hoje ({profile.completedRoutineBlocksToday.length}/
-                  {DAILY_ROUTINE_TEMPLATE.length})
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('rotina')}
-                className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
-              >
-                Abrir Timer <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
+        {/* ABA 2: CHECKLIST DO CRONOGRAMA DE HOJE */}
+        {bottomSectionTab === 'cronograma' && (
+          <div className="divide-y divide-[var(--border-subtle)]">
+            {DAILY_ROUTINE_TEMPLATE.map((block) => {
+              const done = completedRoutineSet.has(block.id);
+              const isBreak =
+                block.phaseType === 'break-tomato' ||
+                block.phaseType === 'lunch';
 
-            <div className="space-y-1 max-h-[380px] overflow-y-auto pr-1">
-              {DAILY_ROUTINE_TEMPLATE.map((block) => {
-                const done = completedRoutineSet.has(block.id);
-                const isBreak =
-                  block.phaseType === 'break-tomato' ||
-                  block.phaseType === 'lunch';
-
-                return (
-                  <div
-                    key={block.id}
-                    className={`p-2.5 rounded-lg border text-xs flex items-start justify-between gap-2 transition ${
-                      done
-                        ? 'bg-[var(--bg-elevated)]/60 border-[var(--border-subtle)] opacity-70'
-                        : isBreak
-                          ? 'bg-[var(--warp-gold-bg)]/40 border-[var(--border-subtle)]'
-                          : 'bg-[var(--bg-surface)] border-[var(--border-subtle)]'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2 min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => toggleRoutineBlock(block)}
-                        className="mt-0.5 shrink-0 text-[var(--kirby-pink)] cursor-pointer"
-                        aria-label={`Marcar ${block.title}`}
-                      >
-                        {done ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-[var(--text-muted)]" />
-                        )}
-                      </button>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--text-muted)]">
-                          <span>{block.timeRange}</span>
-                          <span>•</span>
-                          <span>{block.durationMinutes}m</span>
-                          {isBreak && <MaximTomatoIcon size={12} />}
-                        </div>
-                        <div
-                          className={`font-semibold text-[var(--text-primary)] leading-snug ${
-                            done ? 'line-through text-[var(--text-muted)]' : ''
-                          }`}
-                        >
-                          {block.title}
-                        </div>
+              return (
+                <div
+                  key={block.id}
+                  className={`p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                    done ? 'bg-[var(--bg-elevated)]/40 opacity-70' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleRoutineBlock(block)}
+                      className="mt-0.5 shrink-0 cursor-pointer"
+                      aria-label={`Marcar ${block.title}`}
+                    >
+                      {done ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <Circle className="w-5 h-5 text-[var(--text-muted)]" />
+                      )}
+                    </button>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 font-mono text-xs text-[var(--kirby-pink)]">
+                        <strong>{block.timeRange}</strong>
+                        <span className="text-[var(--text-muted)]">
+                          ({block.durationMinutes} min)
+                        </span>
+                        {isBreak && <MaximTomatoIcon size={14} />}
                       </div>
-                    </div>
-
-                    {block.targetActionView !== 'rotina' && (
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(block.targetActionView)}
-                        className="shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-secondary)] cursor-pointer"
+                      <div
+                        className={`text-sm font-bold text-[var(--text-primary)] ${
+                          done ? 'line-through text-[var(--text-muted)]' : ''
+                        }`}
                       >
-                        Ir
-                      </button>
-                    )}
+                        {block.title}
+                      </div>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {block.description}
+                      </p>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          </section>
 
-          {/* Direct Technical Standards (Normas) Quick-Jump */}
-          <section className="dream-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <FileCode2 className="w-4 h-4 text-[var(--kirby-pink)]" />
-                Normas Técnicas no Edital ({normsIndex.length})
-              </h2>
-            </div>
-            <p className="text-[11px] text-[var(--text-secondary)]">
-              Clique em qualquer norma para abrir diretamente o resumo técnico e os critérios cobrados em prova:
+                  {block.targetActionView !== 'rotina' && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(block.targetActionView)}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] cursor-pointer"
+                    >
+                      Abrir Módulo →
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ABA 3: ÍNDICE DE NORMAS TÉCNICAS DO EDITAL */}
+        {bottomSectionTab === 'normas' && (
+          <div className="p-5 space-y-4">
+            <p className="text-xs text-[var(--text-secondary)]">
+              Clique em qualquer norma técnica para abrir imediatamente a matéria correspondente com seus requisitos cobrados em prova:
             </p>
-            <div className="flex flex-wrap gap-1.5 max-h-56 overflow-y-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {normsIndex.map((item) => (
                 <button
                   key={`${item.norm}-${item.mtId}`}
                   type="button"
                   onClick={() => onNavigate('biblioteca', item.mtId)}
-                  title={`${item.code} — ${item.title}`}
-                  className="px-2 py-1 rounded-md text-[11px] font-mono font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-[var(--text-primary)] transition cursor-pointer"
+                  className="text-left p-3.5 rounded-xl bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)]/50 hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] transition cursor-pointer"
                 >
-                  {item.norm}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-[var(--kirby-pink)]">
+                      {item.norm}
+                    </span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                      {item.code}
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-[var(--text-primary)] truncate mt-1">
+                    {item.title}
+                  </div>
                 </button>
               ))}
             </div>
-          </section>
-
-          {/* Quick Simulado Callout */}
-          <section className="dream-card p-4 flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                <Swords className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
-                Simulados Cronometrados
-              </div>
-              <p className="text-[11px] text-[var(--text-secondary)]">
-                Treine Cesgranrio (5 opções) ou Cebraspe (Certo/Errado).
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigate('simulados')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] shrink-0 cursor-pointer"
-            >
-              Abrir
-            </button>
-          </section>
-        </div>
-      </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

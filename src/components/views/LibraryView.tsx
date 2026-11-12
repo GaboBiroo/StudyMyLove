@@ -10,6 +10,8 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
+  PanelRightClose,
+  PanelRightOpen,
   PlayCircle,
   Search,
   Sigma,
@@ -33,7 +35,13 @@ interface LibraryViewProps {
   onNavigate: (view: AppViewId, microtopicId?: string) => void;
 }
 
-type StudyTabId = 'teoria' | 'formulario' | 'laboratorio' | 'videos' | 'questoes';
+type StudyTabId =
+  | 'teoria'
+  | 'formulario'
+  | 'laboratorio'
+  | 'videos'
+  | 'questoes'
+  | 'notas';
 
 const MACRO_LABELS: Record<MacroArea | 'all', string> = {
   all: 'Todas',
@@ -53,6 +61,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [activeTab, setActiveTab] = useState<StudyTabId>('teoria');
   const [activeVideoIdx, setActiveVideoIdx] = useState(0);
   const [showTopicPicker, setShowTopicPicker] = useState(false);
+  const [showSideNotes, setShowSideNotes] = useState(false);
 
   const candidateTopics = useMemo(
     () => getMicrotopicsForTrack(profile.activeTrack),
@@ -181,24 +190,24 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     selectedMt.videos[activeVideoIdx] ?? selectedMt.videos[0] ?? null;
 
   return (
-    <div className="space-y-5">
-      {/* Top Subject Navigation Bar (Quick Switch + Prev/Next) */}
-      <div className="dream-card p-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+    <div className="space-y-6">
+      {/* Clean Top Subject Selector Bar */}
+      <div className="dream-card p-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={() => setShowTopicPicker((o) => !o)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center gap-2 cursor-pointer"
           >
             <Search className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
-            <span>Trocar Matéria ({ALL_MICROTOPICS.length})</span>
+            <span>Catálogo ({ALL_MICROTOPICS.length})</span>
           </button>
 
           <select
             aria-label="Selecionar matéria rapidamente"
             value={selectedMt.id}
             onChange={(e) => handleSelectTopic(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] max-w-xs sm:max-w-md truncate focus:outline-none focus:border-[var(--kirby-pink)] cursor-pointer"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] max-w-xs sm:max-w-md truncate focus:outline-none focus:border-[var(--kirby-pink)] cursor-pointer"
           >
             {ALL_MICROTOPICS.map((m) => (
               <option key={m.id} value={m.id}>
@@ -208,13 +217,30 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </select>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSideNotes((s) => !s)}
+            className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+              showSideNotes
+                ? 'bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)] border-[var(--border-strong)]'
+                : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {showSideNotes ? (
+              <PanelRightClose className="w-3.5 h-3.5" />
+            ) : (
+              <PanelRightOpen className="w-3.5 h-3.5" />
+            )}
+            <span>Notas ao Lado</span>
+          </button>
+
           {prevTopic && (
             <button
               type="button"
               onClick={() => handleSelectTopic(prevTopic.id)}
               title={`Anterior: ${prevTopic.code} — ${prevTopic.title}`}
-              className="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] inline-flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] inline-flex items-center gap-1 cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               {prevTopic.code}
@@ -225,7 +251,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               type="button"
               onClick={() => handleSelectTopic(nextTopic.id)}
               title={`Próxima: ${nextTopic.code} — ${nextTopic.title}`}
-              className="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] inline-flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] inline-flex items-center gap-1 cursor-pointer"
             >
               {nextTopic.code}
               <ChevronRight className="w-3.5 h-3.5" />
@@ -236,8 +262,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       {/* Collapsible Subject Picker Drawer */}
       {showTopicPicker && (
-        <section className="dream-card p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <section className="dream-card p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
               <input
@@ -248,14 +274,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
               />
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5">
               {(Object.keys(MACRO_LABELS) as Array<MacroArea | 'all'>).map(
                 (area) => (
                   <button
                     key={area}
                     type="button"
                     onClick={() => setAreaFilter(area)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
                       areaFilter === area
                         ? 'bg-[var(--kirby-pink)] text-white'
                         : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
@@ -268,7 +294,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
             {filteredTopics.map((mt) => {
               const p = profile.microtopics[mt.id];
               const isActive = mt.id === selectedMt.id;
@@ -277,7 +303,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   key={mt.id}
                   type="button"
                   onClick={() => handleSelectTopic(mt.id)}
-                  className={`text-left p-2.5 rounded-lg border transition cursor-pointer ${
+                  className={`text-left p-3 rounded-xl border transition cursor-pointer ${
                     isActive
                       ? 'bg-[var(--kirby-pink-soft)] border-[var(--kirby-pink)]'
                       : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border-[var(--border-subtle)]'
@@ -301,33 +327,36 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </section>
       )}
 
-      {/* Main Two-Column Notebook Layout: Document Reader (8/12) + Side Notes & TOC (4/12) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left/Center Document Column */}
-        <main className="lg:col-span-8 space-y-5">
+      {/* Main Content Layout: Full Centered Sheet (or Split when Side Notes active) */}
+      <div
+        className={`grid grid-cols-1 ${
+          showSideNotes ? 'lg:grid-cols-12' : ''
+        } gap-6 items-start`}
+      >
+        <div className={`${showSideNotes ? 'lg:col-span-8' : ''} space-y-6`}>
           {/* Clean Subject Document Header */}
-          <section className="dream-card p-5 sm:p-6 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <section className="dream-card p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded bg-[var(--kirby-pink)] text-white">
                   {selectedMt.code}
                 </span>
                 <CopyAbilityBadge ability={selectedMt.copyAbility} showLabel />
                 <span className="text-xs text-[var(--text-secondary)] font-mono">
-                  Incidência: {selectedMt.incidence}
+                  • Incidência: {selectedMt.incidence}
                 </span>
               </div>
 
               <button
                 type="button"
                 onClick={handleToggleReadingCompleted}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold border inline-flex items-center gap-1.5 transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1.5 transition cursor-pointer ${
                   mtProgress?.readingCompleted
                     ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
                     : 'bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] text-[var(--text-primary)] border-[var(--border-subtle)]'
                 }`}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-4 h-4" />
                 {mtProgress?.readingCompleted
                   ? 'Leitura Concluída'
                   : 'Marcar como Lido'}
@@ -338,24 +367,23 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] leading-snug">
                 {selectedMt.title}
               </h1>
-              <p className="text-xs font-mono text-[var(--text-muted)] mt-0.5">
-                {selectedMt.englishSubtitle}
+              <p className="text-xs font-mono text-[var(--text-muted)] mt-1">
+                {selectedMt.englishSubtitle} • {selectedMt.unipOrigin} → {selectedMt.petrobrasAllocation}
               </p>
-              <p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">
+              <p className="text-sm text-[var(--text-secondary)] mt-2.5 leading-relaxed">
                 {selectedMt.summary}
               </p>
             </div>
 
-            {/* Norms & Curriculum Mapping */}
             {selectedMt.norms.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[11px] font-semibold text-[var(--text-muted)] mr-1">
+                <span className="text-xs font-semibold text-[var(--text-muted)] mr-1">
                   Normas Técnicas:
                 </span>
                 {selectedMt.norms.map((norm) => (
                   <span
                     key={norm}
-                    className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)]"
+                    className="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-md bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)]"
                   >
                     {norm}
                   </span>
@@ -363,25 +391,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </div>
             )}
 
-            {/* Sub-Navigation Content Tabs (Notion / RemNote style) */}
-            <div className="flex flex-wrap gap-1 pt-3 border-t border-[var(--border-subtle)]">
+            {/* Clean Sub-Navigation Tabs */}
+            <div className="flex flex-wrap gap-1.5 pt-4 border-t border-[var(--border-subtle)]">
               <button
                 type="button"
                 onClick={() => setActiveTab('teoria')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
                   activeTab === 'teoria'
                     ? 'bg-[var(--kirby-pink)] text-white'
                     : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                Teoria Completa ({selectedMt.compendium.length})
+                Teoria ({selectedMt.compendium.length})
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('formulario')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
                   activeTab === 'formulario'
                     ? 'bg-[var(--kirby-pink)] text-white'
                     : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -395,34 +423,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('laboratorio')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
                     activeTab === 'laboratorio'
                       ? 'bg-[var(--kirby-pink)] text-white'
                       : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <FlaskConical className="w-3.5 h-3.5" />
-                  Simulador Interativo
+                  Simulador
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={() => setActiveTab('videos')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
                   activeTab === 'videos'
                     ? 'bg-[var(--kirby-pink)] text-white'
                     : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <PlayCircle className="w-3.5 h-3.5" />
-                Aulas & Livros ({selectedMt.videos.length})
+                Videoaulas ({selectedMt.videos.length})
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('questoes')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
                   activeTab === 'questoes'
                     ? 'bg-[var(--kirby-pink)] text-white'
                     : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -431,49 +459,88 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <Zap className="w-3.5 h-3.5" />
                 Questões & Cartões ({topicQuestions.length + topicFlashcards.length})
               </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('notas')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'notas'
+                    ? 'bg-[var(--kirby-pink)] text-white'
+                    : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Minhas Anotações
+              </button>
             </div>
           </section>
 
-          {/* TAB 1: TEORIA COMPLETA (Continuous Document Sheet) */}
+          {/* TAB 1: TEORIA COMPLETA */}
           {activeTab === 'teoria' && (
-            <div className="space-y-5">
+            <div className="space-y-6">
+              {/* Compact Horizontal Section Index */}
+              {selectedMt.compendium.length > 1 && (
+                <div className="dream-card p-4 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-[var(--text-muted)] mr-1">
+                    Seções:
+                  </span>
+                  {selectedMt.compendium.map((sec, idx) => (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById(`sec-${sec.id}`)
+                          ?.scrollIntoView({ behavior: 'smooth' })
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-primary)] transition cursor-pointer"
+                    >
+                      <span className="font-mono font-bold text-[var(--kirby-pink)] mr-1">
+                        {idx + 1}.
+                      </span>
+                      {sec.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {selectedMt.compendium.map((sec, idx) => (
                 <article
                   key={sec.id}
                   id={`sec-${sec.id}`}
-                  className="dream-card p-5 sm:p-6 space-y-4"
+                  className="dream-card p-6 sm:p-7 space-y-5"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-6 h-6 rounded-md bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)] font-mono font-bold text-xs flex items-center justify-center">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-3.5">
+                    <div className="flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-lg bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)] font-mono font-bold text-xs flex items-center justify-center">
                         {idx + 1}
                       </span>
-                      <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+                      <h2 className="text-lg font-bold text-[var(--text-primary)]">
                         {sec.title}
                       </h2>
                     </div>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                    <span className="text-[11px] font-mono px-2.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
                       {sec.levelTag}
                     </span>
                   </div>
 
                   <MathMarkdown
                     text={sec.contentMarkdown}
-                    className="text-sm leading-relaxed"
+                    className="text-sm sm:text-[15px] leading-relaxed"
                   />
 
                   {sec.keyEquations.length > 0 && (
-                    <div className="space-y-2 pt-2">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
+                    <div className="space-y-2.5 pt-2">
+                      <div className="text-xs font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
                         Equações & Relações Fundamentais
                       </div>
-                      <div className="grid grid-cols-1 gap-2.5">
+                      <div className="grid grid-cols-1 gap-3">
                         {sec.keyEquations.map((eq, i) => (
                           <div
                             key={i}
-                            className="p-3.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] overflow-x-auto"
+                            className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] overflow-x-auto"
                           >
-                            <div className="text-xs font-semibold text-[var(--text-primary)] mb-1">
+                            <div className="text-xs font-bold text-[var(--text-primary)] mb-1">
                               {eq.label}
                             </div>
                             <MathBlock latex={eq.latex} display />
@@ -489,7 +556,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   )}
 
                   {sec.examPitfalls.length > 0 && (
-                    <div className="p-3.5 rounded-lg bg-[var(--bg-accent-soft)] border border-[var(--border-strong)] space-y-1.5">
+                    <div className="p-4 rounded-xl bg-[var(--bg-accent-soft)] border border-[var(--border-strong)] space-y-1.5">
                       <div className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                         <AlertTriangle className="w-4 h-4 text-[var(--maxim-red)]" />
                         Pontos Críticos & Pegadinhas de Banca (Cesgranrio / Cebraspe / FGV)
@@ -504,13 +571,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </article>
               ))}
 
-              {/* Inline Interactive Simulator at bottom of Theory if available */}
               {selectedMt.interactiveDiagram !== 'none' && (
-                <section className="dream-card p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
-                      Simulador Físico / Engenharia Interativo
-                    </span>
+                <section className="dream-card p-6 space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
+                    Simulador Físico / Engenharia Interativo
                   </div>
                   <InteractiveEngineeringDiagram
                     diagramId={selectedMt.interactiveDiagram}
@@ -520,23 +584,23 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
           )}
 
-          {/* TAB 2: FORMULÁRIO RÁPIDO (All Equations of the Subject) */}
+          {/* TAB 2: FORMULÁRIO RÁPIDO */}
           {activeTab === 'formulario' && (
-            <section className="dream-card p-5 sm:p-6 space-y-4">
-              <div className="border-b border-[var(--border-subtle)] pb-3">
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
+            <section className="dream-card p-6 space-y-4">
+              <div className="border-b border-[var(--border-subtle)] pb-3.5">
+                <h2 className="text-lg font-bold text-[var(--text-primary)]">
                   Formulário Direto — {selectedMt.code}: {selectedMt.title}
                 </h2>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Todas as equações, parâmetros dimensionais e condições de contorno desta matéria reunidas para consulta rápida.
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  Todas as equações e condições de contorno desta matéria reunidas para revisão rápida.
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 {topicEquations.map((eq, idx) => (
                   <div
                     key={idx}
-                    className="p-4 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1.5"
+                    className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1.5"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-[var(--text-primary)]">
@@ -561,19 +625,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           {/* TAB 3: SIMULADOR INTERATIVO */}
           {activeTab === 'laboratorio' &&
             selectedMt.interactiveDiagram !== 'none' && (
-              <section className="dream-card p-5 space-y-3">
+              <section className="dream-card p-6 space-y-3">
                 <InteractiveEngineeringDiagram
                   diagramId={selectedMt.interactiveDiagram}
                 />
               </section>
             )}
 
-          {/* TAB 4: VIDEOAULAS & BIBLIOGRAFIA */}
+          {/* TAB 4: VIDEOAULAS & LIVROS */}
           {activeTab === 'videos' && (
-            <div className="space-y-5">
-              <section className="dream-card p-5 space-y-4">
+            <div className="space-y-6">
+              <section className="dream-card p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">
                     Videoaulas Verificadas ({selectedMt.videos.length})
                   </h2>
                   <span className="text-xs font-mono text-[var(--text-secondary)]">
@@ -583,7 +647,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </div>
 
                 {activeVideo && activeVideo.youtubeId ? (
-                  <div className="aspect-video w-full rounded-lg overflow-hidden border border-[var(--border-subtle)] bg-black">
+                  <div className="aspect-video w-full rounded-xl overflow-hidden border border-[var(--border-subtle)] bg-black">
                     <iframe
                       key={activeVideo.youtubeId}
                       src={`https://www.youtube-nocookie.com/embed/${activeVideo.youtubeId}?rel=0`}
@@ -596,7 +660,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 ) : null}
 
                 {activeVideo && (
-                  <div className="p-3.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-bold text-[var(--kirby-pink)]">
@@ -639,13 +703,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {selectedMt.videos.map((vid, idx) => (
                     <button
                       key={vid.id}
                       type="button"
                       onClick={() => setActiveVideoIdx(idx)}
-                      className={`text-left p-3 rounded-lg border transition cursor-pointer ${
+                      className={`text-left p-3.5 rounded-xl border transition cursor-pointer ${
                         idx === activeVideoIdx
                           ? 'bg-[var(--kirby-pink-soft)] border-[var(--kirby-pink)]'
                           : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border-[var(--border-subtle)]'
@@ -662,16 +726,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </div>
               </section>
 
-              <section className="dream-card p-5 space-y-3">
-                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <section className="dream-card p-6 space-y-3">
+                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
                   <BookMarked className="w-4 h-4 text-[var(--kirby-pink)]" />
                   Capítulos de Livros-Texto Recomendados
                 </h2>
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {selectedMt.books.map((bk, i) => (
                     <div
                       key={i}
-                      className="p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs space-y-0.5"
+                      className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs space-y-1"
                     >
                       <div className="font-bold text-[var(--text-primary)]">
                         {bk.citation}
@@ -689,17 +753,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
           )}
 
-          {/* TAB 5: QUESTÕES & CARTÕES DO TEMA (Direct Content View) */}
+          {/* TAB 5: QUESTÕES & CARTÕES DO TEMA */}
           {activeTab === 'questoes' && (
-            <div className="space-y-5">
-              <section className="dream-card p-5 space-y-4">
+            <div className="space-y-6">
+              <section className="dream-card p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-base font-bold text-[var(--text-primary)]">
+                    <h2 className="text-lg font-bold text-[var(--text-primary)]">
                       Questões desta Matéria ({topicQuestions.length})
                     </h2>
                     <p className="text-xs text-[var(--text-secondary)]">
-                      Visualize as questões e memoriais analíticos ou abra no resolvedor interativo.
+                      Visualize os enunciados e resoluções ou abra no resolvedor interativo.
                     </p>
                   </div>
                   <button
@@ -708,15 +772,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="dream-btn-primary px-3.5 py-1.5 text-xs inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    Resolver Interativamente
+                    Resolver no Banco de Questões
                   </button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3.5">
                   {topicQuestions.map((q, idx) => (
                     <div
                       key={q.id}
-                      className="p-4 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2.5"
+                      className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2.5"
                     >
                       <div className="flex items-center justify-between text-xs font-mono">
                         <span className="font-bold text-[var(--kirby-pink)]">
@@ -731,7 +795,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <summary className="font-semibold text-[var(--kirby-pink)] cursor-pointer">
                           Ver Gabarito & Resolução Passo a Passo
                         </summary>
-                        <div className="mt-2 space-y-2 pl-2 border-l-2 border-[var(--kirby-pink)]">
+                        <div className="mt-2 space-y-2 pl-3 border-l-2 border-[var(--kirby-pink)]">
                           {q.solutionStepsMarkdown.map((step, sIdx) => (
                             <div key={sIdx}>
                               <MathMarkdown text={step} />
@@ -747,26 +811,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </div>
               </section>
 
-              <section className="dream-card p-5 space-y-4">
+              <section className="dream-card p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">
                     Flashcards de Dedução Ativa ({topicFlashcards.length})
                   </h2>
                   <button
                     type="button"
                     onClick={() => onNavigate('auto-revisao', selectedMt.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Brain className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
                     Praticar no FSRS
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {topicFlashcards.map((fc) => (
                     <div
                       key={fc.id}
-                      className="p-4 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2"
+                      className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2"
                     >
                       <div className="text-xs font-semibold text-[var(--text-primary)]">
                         <MathMarkdown text={fc.promptMarkdown} />
@@ -780,106 +844,62 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </section>
             </div>
           )}
-        </main>
 
-        {/* Right Sticky Column (4/12): Table of Contents + Personal Study Notebook */}
-        <aside className="lg:col-span-4 space-y-5 lg:sticky lg:top-16">
-          {/* Table of Contents & Exam Alignment */}
-          <section className="dream-card p-4 space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              Estrutura da Matéria
-            </div>
-            <ul className="space-y-1.5 text-xs">
-              {selectedMt.compendium.map((sec, idx) => (
-                <li key={sec.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('teoria');
-                      setTimeout(() => {
-                        document
-                          .getElementById(`sec-${sec.id}`)
-                          ?.scrollIntoView({ behavior: 'smooth' });
-                      }, 50);
-                    }}
-                    className="text-left text-[var(--text-secondary)] hover:text-[var(--kirby-pink)] transition flex items-start gap-2 cursor-pointer"
-                  >
-                    <span className="font-mono font-bold text-[var(--kirby-pink)]">
-                      {idx + 1}.
-                    </span>
-                    <span>{sec.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2 text-[11px]">
-              <div>
-                <span className="font-semibold text-[var(--text-primary)]">
-                  Ementa UNIP:
-                </span>{' '}
-                <span className="text-[var(--text-secondary)]">
-                  {selectedMt.unipOrigin}
+          {/* TAB 6: MINHAS ANOTAÇÕES (Dedicated Full Sheet) */}
+          {activeTab === 'notas' && (
+            <section className="dream-card p-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[var(--kirby-pink)]" />
+                    Caderno de Anotações — {selectedMt.code}
+                  </h2>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Suas anotações ficam salvas automaticamente no navegador para esta matéria.
+                  </p>
+                </div>
+                <span className="text-xs font-mono text-emerald-600 font-semibold">
+                  ✓ Salvo automático
                 </span>
               </div>
-              <div>
-                <span className="font-semibold text-[var(--text-primary)]">
-                  Petrobras:
-                </span>{' '}
-                <span className="text-[var(--text-secondary)]">
-                  {selectedMt.petrobrasAllocation}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-[var(--text-primary)]">
-                  Outros Concursos:
-                </span>{' '}
-                <span className="text-[var(--text-secondary)]">
-                  {selectedMt.generalConcursosRelevance}
-                </span>
-              </div>
-            </div>
+              <textarea
+                value={mtProgress?.notes ?? ''}
+                onChange={(e) => handleNotesChange(e.target.value)}
+                rows={16}
+                placeholder={`Escreva aqui seu resumo pessoal de ${selectedMt.code}, deduções de fórmulas, unidades críticas ou lembretes de normas...`}
+                className="w-full p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] focus:bg-[var(--bg-surface)] text-sm text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--kirby-pink)]"
+              />
+            </section>
+          )}
+        </div>
 
-            <div className="pt-2 border-t border-[var(--border-subtle)] grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onNavigate('exercicios', selectedMt.id)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
-                Questões ({topicQuestions.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('auto-revisao', selectedMt.id)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Brain className="w-3.5 h-3.5 text-[var(--warp-gold)]" />
-                Flashcards ({topicFlashcards.length})
-              </button>
-            </div>
-          </section>
-
-          {/* Persistent Personal Notes (Caderno da Thaisa) */}
-          <section className="dream-card p-4 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
-                Minhas Anotações ({selectedMt.code})
-              </h2>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                Salvo automático
-              </span>
-            </div>
-            <textarea
-              value={mtProgress?.notes ?? ''}
-              onChange={(e) => handleNotesChange(e.target.value)}
-              rows={10}
-              placeholder={`Anote aqui seu resumo pessoal de ${selectedMt.code}, deduções de fórmulas, unidades críticas ou lembretes de normas...`}
-              className="w-full p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] focus:bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--kirby-pink)]"
-            />
-          </section>
-        </aside>
+        {/* Optional Side-by-Side Notes Column (only when toggled on) */}
+        {showSideNotes && (
+          <aside className="lg:col-span-4 space-y-5 lg:sticky lg:top-20">
+            <section className="dream-card p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+                  Notas ({selectedMt.code})
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowSideNotes(false)}
+                  className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+              <textarea
+                value={mtProgress?.notes ?? ''}
+                onChange={(e) => handleNotesChange(e.target.value)}
+                rows={16}
+                placeholder={`Anote aqui seu resumo de ${selectedMt.code} enquanto lê...`}
+                className="w-full p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] focus:bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] leading-relaxed focus:outline-none focus:border-[var(--kirby-pink)]"
+              />
+            </section>
+          </aside>
+        )}
       </div>
     </div>
   );
