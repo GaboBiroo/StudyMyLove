@@ -22,7 +22,7 @@ import {
 } from '../../engine/psychometrics';
 import { recordQuestionAttempt } from '../../utils/storage';
 import type { ExerciseQuestion, UserStudyProfile } from '../../types/study';
-import { CopyAbilityBadge } from '../KirbyArtwork';
+import { CopyAbilityBadge, KirbyMascot } from '../KirbyArtwork';
 import { MathMarkdown } from '../MathMarkdown';
 import type { AppViewId } from './DashboardView';
 
@@ -166,13 +166,16 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
       {/* Header & Controls */}
       <section className="dream-card p-4 sm:p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-bold text-[var(--text-primary)]">
-              Edital Verticalizado & Matriz de Progresso
-            </h1>
-            <p className="text-xs text-[var(--text-secondary)]">
-              Controle completo das {visibleMicrotopics.length} matérias, normas técnicas associadas, status de leitura e domínio por tópico.
-            </p>
+          <div className="flex items-center gap-3">
+            <KirbyMascot ability="waddledee" size={44} />
+            <div>
+              <h1 className="text-lg font-bold text-[var(--text-primary)]">
+                Edital Verticalizado & Matriz de Progresso
+              </h1>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Controle completo das {visibleMicrotopics.length} matérias, normas técnicas associadas, status de leitura e domínio por tópico.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">

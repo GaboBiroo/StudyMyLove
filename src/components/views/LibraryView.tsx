@@ -25,7 +25,7 @@ import {
 } from '../../data/curriculum';
 import type { MacroArea, UserStudyProfile } from '../../types/study';
 import { InteractiveEngineeringDiagram } from '../InteractiveDiagrams';
-import { CopyAbilityBadge } from '../KirbyArtwork';
+import { CopyAbilityBadge, KirbyMascot } from '../KirbyArtwork';
 import { MathBlock, MathMarkdown } from '../MathMarkdown';
 import type { AppViewId } from './DashboardView';
 
@@ -60,6 +60,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [areaFilter, setAreaFilter] = useState<MacroArea | 'all'>('all');
   const [activeTab, setActiveTab] = useState<StudyTabId>('teoria');
   const [activeVideoIdx, setActiveVideoIdx] = useState(0);
+  const [questionsPage, setQuestionsPage] = useState(0);
   const [showTopicPicker, setShowTopicPicker] = useState(false);
   const [showSideNotes, setShowSideNotes] = useState(false);
 
@@ -120,6 +121,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const handleSelectTopic = (mtId: string) => {
     setActiveVideoIdx(0);
+    setQuestionsPage(0);
     setShowTopicPicker(false);
     onUpdateProfile({
       ...profile,
@@ -363,16 +365,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
             </div>
 
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] leading-snug">
-                {selectedMt.title}
-              </h1>
-              <p className="text-xs font-mono text-[var(--text-muted)] mt-1">
-                {selectedMt.englishSubtitle} • {selectedMt.unipOrigin} → {selectedMt.petrobrasAllocation}
-              </p>
-              <p className="text-sm text-[var(--text-secondary)] mt-2.5 leading-relaxed">
-                {selectedMt.summary}
-              </p>
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-16 h-16 rounded-2xl bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] flex items-center justify-center p-1.5">
+                <KirbyMascot ability={selectedMt.copyAbility} size={52} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] leading-snug">
+                  {selectedMt.title}
+                </h1>
+                <p className="text-xs font-mono text-[var(--text-muted)] mt-1">
+                  {selectedMt.englishSubtitle} • {selectedMt.unipOrigin} → {selectedMt.petrobrasAllocation}
+                </p>
+                <p className="text-sm text-[var(--text-secondary)] mt-2.5 leading-relaxed">
+                  {selectedMt.summary}
+                </p>
+              </div>
             </div>
 
             {selectedMt.norms.length > 0 && (
@@ -777,38 +784,76 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </div>
 
                 <div className="space-y-3.5">
-                  {topicQuestions.map((q, idx) => (
-                    <div
-                      key={q.id}
-                      className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2.5"
-                    >
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="font-bold text-[var(--kirby-pink)]">
-                          Questão {idx + 1} • {q.board} ({q.examContext})
-                        </span>
-                      </div>
-                      <MathMarkdown
-                        text={q.statementMarkdown}
-                        className="text-xs sm:text-sm"
-                      />
-                      <details className="pt-2 border-t border-[var(--border-subtle)] text-xs">
-                        <summary className="font-semibold text-[var(--kirby-pink)] cursor-pointer">
-                          Ver Gabarito & Resolução Passo a Passo
-                        </summary>
-                        <div className="mt-2 space-y-2 pl-3 border-l-2 border-[var(--kirby-pink)]">
-                          {q.solutionStepsMarkdown.map((step, sIdx) => (
-                            <div key={sIdx}>
-                              <MathMarkdown text={step} />
-                            </div>
-                          ))}
-                          <div className="font-semibold text-[var(--text-primary)]">
-                            <MathMarkdown text={q.finalDiagnosis} />
+                  {topicQuestions
+                    .slice(questionsPage * 15, (questionsPage + 1) * 15)
+                    .map((q, localIdx) => {
+                      const idx = questionsPage * 15 + localIdx;
+                      return (
+                        <div
+                          key={q.id}
+                          className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between text-xs font-mono">
+                            <span className="font-bold text-[var(--kirby-pink)]">
+                              Questão {idx + 1} de {topicQuestions.length} • {q.board} ({q.examContext})
+                            </span>
                           </div>
+                          <MathMarkdown
+                            text={q.statementMarkdown}
+                            className="text-xs sm:text-sm"
+                          />
+                          <details className="pt-2 border-t border-[var(--border-subtle)] text-xs">
+                            <summary className="font-semibold text-[var(--kirby-pink)] cursor-pointer">
+                              Ver Gabarito & Resolução Passo a Passo
+                            </summary>
+                            <div className="mt-2 space-y-2 pl-3 border-l-2 border-[var(--kirby-pink)]">
+                              {q.solutionStepsMarkdown.map((step, sIdx) => (
+                                <div key={sIdx}>
+                                  <MathMarkdown text={step} />
+                                </div>
+                              ))}
+                              <div className="font-semibold text-[var(--text-primary)]">
+                                <MathMarkdown text={q.finalDiagnosis} />
+                              </div>
+                            </div>
+                          </details>
                         </div>
-                      </details>
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
+
+                {topicQuestions.length > 15 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[var(--border-subtle)] text-xs">
+                    <span className="font-mono text-[var(--text-secondary)]">
+                      Página {questionsPage + 1} de {Math.ceil(topicQuestions.length / 15)} ({topicQuestions.length} questões nesta matéria)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={questionsPage === 0}
+                        onClick={() => setQuestionsPage((p) => Math.max(0, p - 1))}
+                        className="px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] font-semibold text-[var(--text-primary)] disabled:opacity-40 cursor-pointer"
+                      >
+                        « Anteriores 15
+                      </button>
+                      <button
+                        type="button"
+                        disabled={(questionsPage + 1) * 15 >= topicQuestions.length}
+                        onClick={() =>
+                          setQuestionsPage((p) =>
+                            Math.min(
+                              Math.ceil(topicQuestions.length / 15) - 1,
+                              p + 1
+                            )
+                          )
+                        }
+                        className="px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] font-semibold text-[var(--text-primary)] disabled:opacity-40 cursor-pointer"
+                      >
+                        Próximas 15 »
+                      </button>
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="dream-card p-6 space-y-4">

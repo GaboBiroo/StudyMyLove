@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { KIRBY_ABILITY_PNG_MAP } from '../components/KirbyArtwork';
 import {
   ALL_FLASHCARDS,
   ALL_MICROTOPICS,
@@ -8,9 +9,9 @@ import {
 } from './curriculum';
 
 describe('Curriculum & Content Data Integrity', () => {
-  it('contains all 28 microtopics, 140 questions (including European boards), and 56 flashcards with unique IDs', () => {
+  it('contains all 28 microtopics, 16,800 questions (600 per microtopic across Vestibulares, Concursos & Europe), and 56 flashcards with unique IDs', () => {
     expect(ALL_MICROTOPICS).toHaveLength(28);
-    expect(ALL_QUESTIONS).toHaveLength(140);
+    expect(ALL_QUESTIONS).toHaveLength(16800);
     expect(ALL_FLASHCARDS).toHaveLength(56);
 
     const mtIds = new Set(ALL_MICROTOPICS.map((m) => m.id));
@@ -18,13 +19,29 @@ describe('Curriculum & Content Data Integrity', () => {
     const fcIds = new Set(ALL_FLASHCARDS.map((f) => f.id));
 
     expect(mtIds.size).toBe(28);
-    expect(qIds.size).toBe(140);
+    expect(qIds.size).toBe(16800);
     expect(fcIds.size).toBe(56);
+
+    const countsByTopic = new Map<string, number>();
+    for (const q of ALL_QUESTIONS) {
+      countsByTopic.set(q.microtopicId, (countsByTopic.get(q.microtopicId) ?? 0) + 1);
+    }
+    for (const mt of ALL_MICROTOPICS) {
+      expect(countsByTopic.get(mt.id), `${mt.id} question count`).toBe(600);
+    }
 
     const europeanQuestions = ALL_QUESTIONS.filter((q) =>
       q.board.startsWith('Europa')
     );
-    expect(europeanQuestions.length).toBeGreaterThanOrEqual(40);
+    const vestibularQuestions = ALL_QUESTIONS.filter((q) =>
+      q.board.startsWith('Vestibular')
+    );
+    const concursoQuestions = ALL_QUESTIONS.filter(
+      (q) => !q.board.startsWith('Europa') && !q.board.startsWith('Vestibular')
+    );
+    expect(europeanQuestions.length).toBeGreaterThanOrEqual(4000);
+    expect(vestibularQuestions.length).toBeGreaterThanOrEqual(2000);
+    expect(concursoQuestions.length).toBeGreaterThanOrEqual(6000);
   });
 
   it('ensures every microtopic has non-empty compendium, expanded verified videos (>=4), and references', () => {
@@ -93,5 +110,14 @@ describe('Curriculum & Content Data Integrity', () => {
     expect(blank.microtopics['b-en-tech'].pKnown).toBe(0);
     expect(blank.streakDays).toBe(0);
     expect(blank.totalMinutesStudied).toBe(0);
+  });
+
+  it('verifies all official Kirby, Copy Ability, Item, and Character PNGs are mapped to /kirby/*.png', () => {
+    const entries = Object.values(KIRBY_ABILITY_PNG_MAP);
+    expect(entries).toHaveLength(12);
+    for (const rel of entries) {
+      expect(rel.startsWith('/kirby/')).toBe(true);
+      expect(rel.endsWith('.png')).toBe(true);
+    }
   });
 });

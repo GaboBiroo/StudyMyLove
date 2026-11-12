@@ -22,6 +22,7 @@ import {
   getMicrotopicsForTrack,
 } from '../../data/curriculum';
 import {
+  COPY_ABILITIES,
   DAILY_ROUTINE_TEMPLATE,
   PLANETS,
   TRACK_METADATA,
@@ -31,14 +32,17 @@ import {
   diagnoseMicrotopic,
 } from '../../engine/psychometrics';
 import type {
+  CopyAbilityId,
   MacroArea,
   RoutineBlock,
   StudyTrack,
   UserStudyProfile,
 } from '../../types/study';
 import {
+  BossMascot,
   CopyAbilityBadge,
   KirbyMascot,
+  type KirbyMascotVariant,
   MaximTomatoIcon,
   WarpStarIcon,
 } from '../KirbyArtwork';
@@ -59,26 +63,34 @@ interface DashboardViewProps {
   onOpenTutorialModal?: () => void;
 }
 
-const LOVE_NOTES: Array<{ title: string; message: string }> = [
+const LOVE_NOTES: Array<{
+  title: string;
+  message: string;
+  mascot: KirbyMascotVariant;
+}> = [
   {
     title: 'Para o meu amor, Thaisa ♥',
     message:
       'Criei o StudyMyLove inteirinho pensando em você. Eu te amo demais e tenho um orgulho imenso da mulher dedicada, inteligente e incrível que você é. Quis reunir tudo dos seus estudos de Engenharia e da Petrobras em um ambiente calmo, limpo e confortável — para deixar a sua rotina mais leve e te lembrar todos os dias do quanto eu acredito em você.',
+    mascot: 'classic',
   },
   {
     title: 'Meu orgulho diário ♥',
     message:
       'Cada equação deduzida, cada norma revisada e cada questão resolvida aqui dentro é mais um passo rumo à sua aprovação. Você é brilhante, meu amor. Estude no seu ritmo, com tranquilidade no coração, porque eu estou sempre ao seu lado torcendo por cada conquista sua!',
+    mascot: 'waddledee',
   },
   {
     title: 'Cuide de você enquanto estuda ♥',
     message:
       'Não esqueça de beber água, alongar os ombros e fazer suas pausas Maxim Tomato! A sua saúde e o seu bem-estar vêm sempre em primeiro lugar. Eu te amo daqui até Dream Land, minha engenheira favorita ♥',
+    mascot: 'sleep',
   },
   {
     title: 'Você nasceu para brilhar ♥',
     message:
       'Quando algum tema parecer difícil, respire fundo e lembre-se de tudo o que você já superou na Engenharia. Você tem uma mente admirável e uma força linda. Te amo infinitamente!',
+    mascot: 'starride',
   },
 ];
 
@@ -93,7 +105,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [tutorialVisible, setTutorialVisible] = useState(true);
 
   const [bottomSectionTab, setBottomSectionTab] = useState<
-    'materias' | 'cronograma' | 'normas'
+    'materias' | 'cronograma' | 'normas' | 'personagens'
   >('materias');
   const [areaTab, setAreaTab] = useState<'all' | 'priority' | MacroArea>('all');
   const [topicFilter, setTopicFilter] = useState('');
@@ -102,6 +114,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     () => getMicrotopicsForTrack(profile.activeTrack),
     [profile.activeTrack]
   );
+
+  const questionCountByMicrotopic = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const q of ALL_QUESTIONS) {
+      map.set(q.microtopicId, (map.get(q.microtopicId) ?? 0) + 1);
+    }
+    return map;
+  }, []);
 
   const diagnostics = useMemo(() => {
     const now = new Date();
@@ -250,8 +270,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <section className="dream-card p-6 sm:p-7 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-14 h-14 rounded-2xl bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] flex items-center justify-center shrink-0">
-              <KirbyMascot ability="classic" size={48} />
+            <div className="w-16 h-16 rounded-2xl bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] flex items-center justify-center shrink-0 p-1">
+              <KirbyMascot ability={currentLoveNote.mascot} size={54} />
             </div>
             <div>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--kirby-pink)]">
@@ -365,9 +385,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
             <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
-                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                  01 • Rotina & Timer
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                    01 • Rotina & Timer
+                  </span>
+                  <MaximTomatoIcon size={30} />
+                </div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Planeje o seu Dia
                 </h3>
@@ -386,9 +409,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
-                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                  02 • Teoria & Notas
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                    02 • Teoria & Notas
+                  </span>
+                  <KirbyMascot ability="waddledee" size={32} />
+                </div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Estude no Caderno
                 </h3>
@@ -407,14 +433,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
-                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                  03 • Banco Gigante (BR & Europa)
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                    03 • 600 Questões / Matéria
+                  </span>
+                  <KirbyMascot ability="magolor" size={32} />
+                </div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  Resolva Questões
+                  Vestibular, Concurso & Europa
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Treine nas <strong>{ALL_QUESTIONS.length} questões comentadas</strong> (Petrobras, Cebraspe, FGV e processos seletivos europeus como CERN, ESA e EPSO).
+                  Treine nas <strong>{ALL_QUESTIONS.length.toLocaleString('pt-BR')} questões comentadas</strong> (600 por matéria: ITA/IME/FUVEST, Petrobras/Cebraspe e CERN/ESA/EPSO) com <strong>salvamento automático</strong>.
                 </p>
               </div>
               <button
@@ -422,15 +451,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={() => onNavigate('exercicios')}
                 className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
               >
-                Banco de Questões ({ALL_QUESTIONS.length}) <ArrowRight className="w-3 h-3" />
+                Banco de Questões ({ALL_QUESTIONS.length.toLocaleString('pt-BR')}) <ArrowRight className="w-3 h-3" />
               </button>
             </div>
 
             <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
-                <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                  04 • Nível Normal vs. Expert
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                    04 • Nível Normal vs. Expert
+                  </span>
+                  <BossMascot boss="metaknight" size={32} />
+                </div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Simulado Sem Tempo ou Por Tema
                 </h3>
@@ -488,9 +520,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--kirby-pink)]">
                     Matéria Recomendada
                   </span>
-                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
-                    {topFocus.mt.code}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+                      {topFocus.mt.code}
+                    </span>
+                    <KirbyMascot ability={topFocus.mt.copyAbility} size={34} />
+                  </div>
                 </div>
                 <h3 className="text-base font-bold text-[var(--text-primary)] leading-snug">
                   {topFocus.mt.title}
@@ -543,7 +578,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--warp-gold)]">
                   Repetição Espaçada (FSRS)
                 </span>
-                <Brain className="w-4 h-4 text-[var(--warp-gold)]" />
+                <KirbyMascot ability="doctor" size={34} />
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold font-mono text-[var(--text-primary)]">
@@ -577,7 +612,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--sky-info)]">
                   Meta & Ritmo do Dia
                 </span>
-                <Clock className="w-4 h-4 text-[var(--sky-info)]" />
+                <KirbyMascot ability="starride" size={34} />
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold font-mono text-[var(--text-primary)]">
@@ -658,6 +693,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <FileCode2 className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
               Normas Técnicas ({normsIndex.length})
             </button>
+
+            <button
+              type="button"
+              onClick={() => setBottomSectionTab('personagens')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer ${
+                bottomSectionTab === 'personagens'
+                  ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border-strong)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <WarpStarIcon size={15} />
+              Personagens & Copy Abilities
+            </button>
           </div>
 
           {bottomSectionTab === 'materias' && (
@@ -714,7 +762,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 return (
                   <div key={planet.id}>
                     <div className="px-5 py-2.5 bg-[var(--bg-elevated)] flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
+                      <div className="flex items-center gap-2.5 font-bold text-[var(--text-primary)]">
+                        <KirbyMascot ability={planet.copyAbility} size={28} />
                         <CopyAbilityBadge ability={planet.copyAbility} />
                         <span>{planet.name}</span>
                       </div>
@@ -729,9 +778,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           (acc, s) => acc + s.keyEquations.length,
                           0
                         );
-                        const qCount = ALL_QUESTIONS.filter(
-                          (q) => q.microtopicId === mt.id
-                        ).length;
+                        const qCount = questionCountByMicrotopic.get(mt.id) ?? 0;
                         const pct = Math.round(prog.pKnown * 100);
                         const mtCorrect = prog.responses.filter(
                           (r) => r.correct
@@ -935,6 +982,150 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ABA 4: PERSONAGENS & COPY ABILITIES OFICIAIS DO KIRBY */}
+        {bottomSectionTab === 'personagens' && (
+          <div className="p-5 space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                Copy Abilities Oficiais do Kirby por Domínio de Engenharia
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                Renders oficiais da série Kirby (Nintendo / HAL Laboratory) associados a cada área técnica do seu edital:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-3">
+                {(Object.keys(COPY_ABILITIES) as CopyAbilityId[]).map((abId) => {
+                  const info = COPY_ABILITIES[abId];
+                  const matching = diagnostics.filter((d) => d.mt.copyAbility === abId);
+                  const avgPct =
+                    matching.length > 0
+                      ? Math.round(
+                          (matching.reduce((acc, m) => acc + m.prog.pKnown, 0) /
+                            matching.length) *
+                            100
+                        )
+                      : 0;
+                  return (
+                    <div
+                      key={abId}
+                      className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex items-center gap-3.5"
+                    >
+                      <div className="w-16 h-16 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 p-1.5">
+                        <KirbyMascot ability={abId} size={52} />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                            {info.name}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
+                            {avgPct}%
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-semibold text-[var(--kirby-pink)] truncate">
+                          {info.kirbyForm}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-secondary)] line-clamp-2">
+                          {info.domain}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[var(--border-subtle)]">
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                Companheiros & Chefões Oficiais de Dream Land
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                Personagens clássicos que acompanham seus treinos e simulados:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mt-3">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('biblioteca')}
+                  className="p-3.5 rounded-xl bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] flex items-center gap-3 text-left transition cursor-pointer"
+                >
+                  <KirbyMascot ability="waddledee" size={48} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                      Bandana Waddle Dee
+                    </div>
+                    <div className="text-[10px] text-[var(--text-secondary)]">
+                      Guardião do Caderno & Teoria
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate('exercicios')}
+                  className="p-3.5 rounded-xl bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] flex items-center gap-3 text-left transition cursor-pointer"
+                >
+                  <KirbyMascot ability="magolor" size={48} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                      Magolor
+                    </div>
+                    <div className="text-[10px] text-[var(--text-secondary)]">
+                      Mestre do Banco de Questões
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate('simulados')}
+                  className="p-3.5 rounded-xl bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] flex items-center gap-3 text-left transition cursor-pointer"
+                >
+                  <BossMascot boss="dedede" size={48} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                      King Dedede
+                    </div>
+                    <div className="text-[10px] text-[var(--text-secondary)]">
+                      Simulado Cesgranrio (Petrobras)
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate('simulados')}
+                  className="p-3.5 rounded-xl bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] flex items-center gap-3 text-left transition cursor-pointer"
+                >
+                  <BossMascot boss="metaknight" size={48} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                      Meta Knight
+                    </div>
+                    <div className="text-[10px] text-[var(--text-secondary)]">
+                      Simulado Cebraspe (Certo/Errado)
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate('simulados')}
+                  className="p-3.5 rounded-xl bg-[var(--bg-elevated)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] flex items-center gap-3 text-left transition cursor-pointer"
+                >
+                  <BossMascot boss="galactaknight" size={48} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                      Galacta Knight
+                    </div>
+                    <div className="text-[10px] text-[var(--text-secondary)]">
+                      Simulado Multibancas & Expert
+                    </div>
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
         )}

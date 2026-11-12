@@ -8,6 +8,7 @@ import {
   Clock,
   HelpCircle,
   PenLine,
+  Save,
   ShieldAlert,
   Tag,
   XCircle,
@@ -17,9 +18,12 @@ import {
   ALL_QUESTIONS,
   getMicrotopicsForTrack,
 } from '../../data/curriculum';
+import { classifyEngineerLevel } from '../../engine/psychometrics';
 import {
   applyErrorTagToLastAttempt,
+  loadSavedExerciseSession,
   recordQuestionAttempt,
+  saveExerciseSession,
 } from '../../utils/storage';
 import type {
   ErrorCategory,
@@ -27,7 +31,7 @@ import type {
   ExerciseQuestion,
   UserStudyProfile,
 } from '../../types/study';
-import { CopyAbilityBadge } from '../KirbyArtwork';
+import { CopyAbilityBadge, KirbyMascot } from '../KirbyArtwork';
 import { MathMarkdown } from '../MathMarkdown';
 import type { AppViewId } from './DashboardView';
 
@@ -37,6 +41,8 @@ interface ExercisesViewProps {
   onUpdateProfile: (next: UserStudyProfile) => void;
   onNavigate: (view: AppViewId, microtopicId?: string) => void;
 }
+
+type ExamCategoryFilter = 'all' | 'concurso' | 'vestibular' | 'europa';
 
 const ERROR_TAGS: Array<{
   id: ErrorCategory;
@@ -65,25 +71,76 @@ const ERROR_TAGS: Array<{
   },
 ];
 
+const PAGE_WINDOW_SIZE = 30;
+
 export const ExercisesView: React.FC<ExercisesViewProps> = ({
   profile,
   initialMicrotopicFilter = 'all',
   onUpdateProfile,
   onNavigate,
 }) => {
+  const savedSession = useMemo(() => loadSavedExerciseSession(), []);
+
   const trackMicrotopics = useMemo(
     () => getMicrotopicsForTrack(profile.activeTrack),
     [profile.activeTrack]
   );
 
-  const [microtopicFilter, setMicrotopicFilter] = useState<string>(
-    initialMicrotopicFilter
+  const [microtopicFilter, setMicrotopicFilter] = useState<string>(() => {
+    if (initialMicrotopicFilter && initialMicrotopicFilter !== 'all') {
+      return initialMicrotopicFilter;
+    }
+    return savedSession?.microtopicFilter ?? 'all';
+  });
+
+  const [categoryFilter, setCategoryFilter] = useState<ExamCategoryFilter>(
+    () => (savedSession?.categoryFilter as ExamCategoryFilter) ?? 'all'
   );
-  const [boardFilter, setBoardFilter] = useState<ExamBoard | 'all' | 'all_europe'>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'mcq5' | 'cebraspe_tf'>('all');
-  const [onlyUnresolved, setOnlyUnresolved] = useState(false);
+
+  const [boardFilter, setBoardFilter] = useState<
+    ExamBoard | 'all' | 'all_europe' | 'all_vestibular'
+  >(
+    () =>
+      (savedSession?.boardFilter as
+        | ExamBoard
+        | 'all'
+        | 'all_europe'
+        | 'all_vestibular') ?? 'all'
+  );
+
+  const [typeFilter, setTypeFilter] = useState<'all' | 'mcq5' | 'cebraspe_tf'>(
+    () => savedSession?.typeFilter ?? 'all'
+  );
+  const [onlyUnresolved, setOnlyUnresolved] = useState<boolean>(
+    () => savedSession?.onlyUnresolved ?? false
+  );
   const [showScratchpad, setShowScratchpad] = useState(false);
-  const [scratchText, setScratchText] = useState('');
+  const [scratchText, setScratchText] = useState<string>(
+    () => savedSession?.scratchText ?? ''
+  );
+  const [jumpInput, setJumpInput] = useState('');
+  const [lastSavedLabel, setLastSavedLabel] = useState<string>(
+    'Progresso salvo automaticamente'
+  );
+
+  // Sync if user clicked a specific subject's "Questões" button from another view
+  useEffect(() => {
+    if (initialMicrotopicFilter && initialMicrotopicFilter !== 'all') {
+      setMicrotopicFilter(initialMicrotopicFilter);
+      setCurrentIdx(0);
+    }
+  }, [initialMicrotopicFilter]);
+
+  // Fast O(1) lookup map of last attempt status per questionId
+  const questionStatusMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const mtProg of Object.values(profile.microtopics)) {
+      for (const r of mtProg.responses) {
+        map.set(r.questionId, r.correct);
+      }
+    }
+    return map;
+  }, [profile.microtopics]);
 
   const filteredQuestions = useMemo(() => {
     const validTrackIds = new Set(trackMicrotopics.map((m) => m.id));
@@ -93,31 +150,48 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       } else if (q.microtopicId !== microtopicFilter) {
         return false;
       }
+
+      if (categoryFilter === 'vestibular') {
+        if (!q.board.startsWith('Vestibular')) return false;
+      } else if (categoryFilter === 'europa') {
+        if (!q.board.startsWith('Europa')) return false;
+      } else if (categoryFilter === 'concurso') {
+        if (q.board.startsWith('Vestibular') || q.board.startsWith('Europa')) {
+          return false;
+        }
+      }
+
       if (boardFilter === 'all_europe') {
         if (!q.board.startsWith('Europa')) return false;
+      } else if (boardFilter === 'all_vestibular') {
+        if (!q.board.startsWith('Vestibular')) return false;
       } else if (boardFilter !== 'all' && q.board !== boardFilter) {
         return false;
       }
+
       if (typeFilter !== 'all' && q.questionType !== typeFilter) return false;
       if (onlyUnresolved) {
-        const prog = profile.microtopics[q.microtopicId];
-        const solvedCorrectly = prog?.responses.some(
-          (r) => r.questionId === q.id && r.correct
-        );
-        if (solvedCorrectly) return false;
+        if (questionStatusMap.get(q.id) === true) return false;
       }
       return true;
     });
   }, [
     trackMicrotopics,
     microtopicFilter,
+    categoryFilter,
     boardFilter,
     typeFilter,
     onlyUnresolved,
-    profile.microtopics,
+    questionStatusMap,
   ]);
 
-  const [currentIdx, setCurrentIdx] = useState(0);
+  const [currentIdx, setCurrentIdx] = useState<number>(() => {
+    if (initialMicrotopicFilter && initialMicrotopicFilter !== 'all') {
+      return 0;
+    }
+    return savedSession?.currentIdx ?? 0;
+  });
+
   const [selectedMcqIdx, setSelectedMcqIdx] = useState<number | null>(null);
   const [selectedBool, setSelectedBool] = useState<boolean | null>(null);
   const [wasGuess, setWasGuess] = useState(false);
@@ -131,20 +205,41 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     taggedCategory?: ErrorCategory;
   } | null>(null);
 
+  const safeIdx =
+    filteredQuestions.length > 0
+      ? Math.min(currentIdx, filteredQuestions.length - 1)
+      : 0;
+
   const currentQuestion: ExerciseQuestion | undefined =
-    filteredQuestions[currentIdx] ?? filteredQuestions[0];
+    filteredQuestions[safeIdx] ?? filteredQuestions[0];
+
+  // Auto-save current exercise session state on every change
+  useEffect(() => {
+    saveExerciseSession({
+      microtopicFilter,
+      boardFilter,
+      categoryFilter,
+      typeFilter,
+      onlyUnresolved,
+      currentIdx: safeIdx,
+      scratchText,
+      savedAtISO: new Date().toISOString(),
+    });
+  }, [
+    microtopicFilter,
+    boardFilter,
+    categoryFilter,
+    typeFilter,
+    onlyUnresolved,
+    safeIdx,
+    scratchText,
+  ]);
 
   useEffect(() => {
-    setCurrentIdx(0);
-    setSelectedMcqIdx(null);
-    setSelectedBool(null);
-    setWasGuess(false);
-    setSubmissionFeedback(null);
-    setElapsedSec(0);
-  }, [microtopicFilter, boardFilter, typeFilter, onlyUnresolved]);
-
-  useEffect(() => {
-    if (!currentQuestion || submissionFeedback?.questionId === currentQuestion.id) {
+    if (
+      !currentQuestion ||
+      submissionFeedback?.questionId === currentQuestion.id
+    ) {
       return;
     }
     const id = window.setInterval(() => {
@@ -155,8 +250,20 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   const goToIndex = (nextIdx: number) => {
     if (filteredQuestions.length === 0) return;
-    const bounded = Math.max(0, Math.min(filteredQuestions.length - 1, nextIdx));
+    const bounded = Math.max(
+      0,
+      Math.min(filteredQuestions.length - 1, nextIdx)
+    );
     setCurrentIdx(bounded);
+    setSelectedMcqIdx(null);
+    setSelectedBool(null);
+    setWasGuess(false);
+    setSubmissionFeedback(null);
+    setElapsedSec(0);
+  };
+
+  const handleFilterResetIndex = () => {
+    setCurrentIdx(0);
     setSelectedMcqIdx(null);
     setSelectedBool(null);
     setWasGuess(false);
@@ -188,6 +295,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       ...nextProfile,
       selectedMicrotopicId: currentQuestion.microtopicId,
     });
+
+    const nowTime = new Date().toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    setLastSavedLabel(`Salvo automaticamente às ${nowTime}`);
 
     setSubmissionFeedback({
       questionId: currentQuestion.id,
@@ -225,24 +339,51 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     Boolean(currentQuestion) &&
     submissionFeedback?.questionId === currentQuestion?.id;
 
+  // Count how many questions in the current filter are already solved
+  const solvedInFilterCount = useMemo(() => {
+    let count = 0;
+    for (const q of filteredQuestions) {
+      if (questionStatusMap.has(q.id)) count++;
+    }
+    return count;
+  }, [filteredQuestions, questionStatusMap]);
+
+  // Paginated window of 30 questions around safeIdx
+  const pageStart =
+    Math.floor(safeIdx / PAGE_WINDOW_SIZE) * PAGE_WINDOW_SIZE;
+  const pageEnd = Math.min(
+    filteredQuestions.length,
+    pageStart + PAGE_WINDOW_SIZE
+  );
+  const visiblePageQuestions = filteredQuestions.slice(pageStart, pageEnd);
+
   return (
     <div className="space-y-5">
-      {/* Compact Filter Bar */}
-      <section className="dream-card p-4 space-y-3">
+      {/* Filter & Auto-Save Status Bar */}
+      <section className="dream-card p-4 sm:p-5 space-y-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-bold text-[var(--text-primary)]">
-              Banco de Questões Comentadas
+          <div className="flex flex-wrap items-center gap-2.5">
+            <KirbyMascot
+              ability={currentMt?.copyAbility ?? 'magolor'}
+              size={38}
+            />
+            <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+              Banco Gigante de Questões (600 por Micro-Matéria)
             </h1>
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-              {filteredQuestions.length} de {ALL_QUESTIONS.length} questões
+            <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] text-[var(--kirby-pink)] font-bold">
+              {filteredQuestions.length.toLocaleString('pt-BR')} de{' '}
+              {ALL_QUESTIONS.length.toLocaleString('pt-BR')} questões
+            </span>
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 inline-flex items-center gap-1">
+              <Save className="w-3 h-3" />
+              {lastSavedLabel} ({solvedInFilterCount} resolvidas no filtro)
             </span>
           </div>
 
           <button
             type="button"
             onClick={() => setShowScratchpad((s) => !s)}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold border inline-flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1.5 transition cursor-pointer ${
               showScratchpad
                 ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
@@ -253,22 +394,54 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </button>
         </div>
 
+        {/* Category Quick Pills: Todos | Concursos | Vestibulares | Processos Seletivos Europeus */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          {(
+            [
+              ['all', 'Todos (Vestibular + Concurso + Processo Seletivo)'],
+              ['concurso', 'Concursos (Petrobras / Cebraspe / FGV / Marinha)'],
+              ['vestibular', 'Vestibulares (ITA / IME / FUVEST / UNICAMP)'],
+              ['europa', 'Processos Seletivos Europeus (CERN / ESA / Offshore / UE)'],
+            ] as const
+          ).map(([catId, label]) => (
+            <button
+              key={catId}
+              type="button"
+              onClick={() => {
+                setCategoryFilter(catId);
+                handleFilterResetIndex();
+              }}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                categoryFilter === catId
+                  ? 'bg-[var(--kirby-pink)] text-white'
+                  : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-              Matéria
+              Micro-Matéria (600 questões cada)
             </label>
             <select
               value={microtopicFilter}
-              onChange={(e) => setMicrotopicFilter(e.target.value)}
+              onChange={(e) => {
+                setMicrotopicFilter(e.target.value);
+                handleFilterResetIndex();
+              }}
               className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
             >
               <option value="all">
-                Todas da Trilha ({trackMicrotopics.length})
+                Todas da Trilha ({trackMicrotopics.length} matérias •{' '}
+                {(trackMicrotopics.length * 600).toLocaleString('pt-BR')} questões)
               </option>
               {ALL_MICROTOPICS.map((mt) => (
                 <option key={mt.id} value={mt.id}>
-                  {mt.code} — {mt.title}
+                  {mt.code} — {mt.title} (600 questões)
                 </option>
               ))}
             </select>
@@ -276,27 +449,43 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-              Banca
+              Banca / Instituição
             </label>
             <select
               value={boardFilter}
-              onChange={(e) =>
-                setBoardFilter(e.target.value as ExamBoard | 'all' | 'all_europe')
-              }
+              onChange={(e) => {
+                setBoardFilter(
+                  e.target.value as
+                    | ExamBoard
+                    | 'all'
+                    | 'all_europe'
+                    | 'all_vestibular'
+                );
+                handleFilterResetIndex();
+              }}
               className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
             >
-              <option value="all">Todas as Bancas (Brasil & Europa)</option>
-              <option value="all_europe">
-                🇪🇺 Todas da Europa (CERN / ESA / EPSO / Offshore / CEng)
+              <option value="all">Todas as Bancas e Instituições</option>
+              <option value="all_vestibular">
+                🎓 Todos os Vestibulares (ITA / IME / FUVEST / UNICAMP)
               </option>
-              <option value="Cesgranrio">Cesgranrio (Petrobras / BNDES)</option>
-              <option value="Cebraspe">Cebraspe (Certo/Errado)</option>
-              <option value="FGV">FGV (EPE / Concursos)</option>
-              <option value="Marinha CP-CEM">Marinha CP-CEM</option>
+              <option value="all_europe">
+                🇪🇺 Todos os Processos Europeus (CERN / ESA / EPSO / Offshore / CEng)
+              </option>
+              <option value="Cesgranrio">Cesgranrio (Petrobras / Transpetro / BNDES)</option>
+              <option value="Cebraspe">Cebraspe (Petrobras / ANP — Certo/Errado)</option>
+              <option value="FGV">FGV (EPE / Eletrobras / Concursos)</option>
+              <option value="Marinha CP-CEM">Marinha do Brasil (CP-CEM)</option>
               <option value="Vunesp">Vunesp</option>
               <option value="FCC">FCC</option>
+              <option value="Vestibular — ITA / IME">
+                🎓 Vestibular — ITA / IME (Engenharia Militar & Aeroespacial)
+              </option>
+              <option value="Vestibular — FUVEST / UNICAMP">
+                🎓 Vestibular — FUVEST (Poli-USP) / UNICAMP
+              </option>
               <option value="Europa — CERN / ESA">
-                🇪🇺 Europa — CERN / ESA (Suíça / Espacial)
+                🇪🇺 Europa — CERN / ESA (Genebra & Agência Espacial)
               </option>
               <option value="Europa — Energy Offshore (Equinor/Shell)">
                 🇪🇺 Europa — Energy Offshore (Equinor / Shell / Mar do Norte)
@@ -316,9 +505,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </label>
             <select
               value={typeFilter}
-              onChange={(e) =>
-                setTypeFilter(e.target.value as 'all' | 'mcq5' | 'cebraspe_tf')
-              }
+              onChange={(e) => {
+                setTypeFilter(e.target.value as 'all' | 'mcq5' | 'cebraspe_tf');
+                handleFilterResetIndex();
+              }}
               className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
             >
               <option value="all">Múltipla Escolha + Certo/Errado</option>
@@ -332,41 +522,101 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <input
                 type="checkbox"
                 checked={onlyUnresolved}
-                onChange={(e) => setOnlyUnresolved(e.target.checked)}
+                onChange={(e) => {
+                  setOnlyUnresolved(e.target.checked);
+                  handleFilterResetIndex();
+                }}
               />
-              Somente não acertadas
+              Somente ainda não acertadas
             </label>
           </div>
         </div>
 
-        {/* Compact Numbered Strip */}
+        {/* Paginated Window Strip (30 items per page) + Direct Jump Input */}
         {filteredQuestions.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-2 border-t border-[var(--border-subtle)]">
-            {filteredQuestions.map((q, idx) => {
-              const prog = profile.microtopics[q.microtopicId];
-              const lastAttempt = [...(prog?.responses ?? [])]
-                .reverse()
-                .find((r) => r.questionId === q.id);
-              const active = idx === currentIdx;
-              const pillCls = active
-                ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
-                : lastAttempt?.correct === true
-                  ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
-                  : lastAttempt?.correct === false
-                    ? 'bg-rose-500/15 text-rose-700 border-rose-500/30'
-                    : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)]';
-
-              return (
+          <div className="pt-2.5 border-t border-[var(--border-subtle)] space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
                 <button
-                  key={q.id}
                   type="button"
-                  onClick={() => goToIndex(idx)}
-                  className={`w-7 h-7 rounded-md text-[11px] font-mono font-bold border transition cursor-pointer ${pillCls}`}
+                  disabled={pageStart === 0}
+                  onClick={() => goToIndex(Math.max(0, pageStart - PAGE_WINDOW_SIZE))}
+                  className="px-2.5 py-1 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] font-mono font-semibold text-[11px] text-[var(--text-secondary)] disabled:opacity-40 cursor-pointer"
                 >
-                  {idx + 1}
+                  « Anteriores {PAGE_WINDOW_SIZE}
                 </button>
-              );
-            })}
+                <span className="font-mono text-[11px] text-[var(--text-secondary)] px-1">
+                  Exibindo <strong>{pageStart + 1}</strong>–
+                  <strong>{pageEnd}</strong> de{' '}
+                  <strong>{filteredQuestions.length.toLocaleString('pt-BR')}</strong>
+                </span>
+                <button
+                  type="button"
+                  disabled={pageEnd >= filteredQuestions.length}
+                  onClick={() => goToIndex(pageEnd)}
+                  className="px-2.5 py-1 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] font-mono font-semibold text-[11px] text-[var(--text-secondary)] disabled:opacity-40 cursor-pointer"
+                >
+                  Próximas {PAGE_WINDOW_SIZE} »
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const num = Number(jumpInput);
+                  if (!Number.isNaN(num) && num >= 1) {
+                    goToIndex(num - 1);
+                    setJumpInput('');
+                  }
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  Ir p/ nº:
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={filteredQuestions.length}
+                  value={jumpInput}
+                  onChange={(e) => setJumpInput(e.target.value)}
+                  placeholder={`1..${filteredQuestions.length}`}
+                  className="w-24 px-2 py-0.5 text-xs font-mono rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                />
+                <button
+                  type="submit"
+                  className="px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-primary)] cursor-pointer"
+                >
+                  Ir
+                </button>
+              </form>
+            </div>
+
+            <div className="flex flex-wrap gap-1">
+              {visiblePageQuestions.map((q, localIdx) => {
+                const idx = pageStart + localIdx;
+                const status = questionStatusMap.get(q.id);
+                const active = idx === safeIdx;
+                const pillCls = active
+                  ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
+                  : status === true
+                    ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
+                    : status === false
+                      ? 'bg-rose-500/15 text-rose-700 border-rose-500/30'
+                      : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)]';
+
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => goToIndex(idx)}
+                    className={`min-w-8 h-7 px-1.5 rounded-md text-[11px] font-mono font-bold border transition cursor-pointer ${pillCls}`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </section>
@@ -381,9 +631,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             type="button"
             onClick={() => {
               setMicrotopicFilter('all');
+              setCategoryFilter('all');
               setBoardFilter('all');
               setTypeFilter('all');
               setOnlyUnresolved(false);
+              handleFilterResetIndex();
             }}
             className="dream-btn-primary px-4 py-1.5 text-xs cursor-pointer"
           >
@@ -405,7 +657,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink)] text-white">
-                  Q{currentIdx + 1}/{filteredQuestions.length}
+                  Q{safeIdx + 1}/{filteredQuestions.length.toLocaleString('pt-BR')}
                 </span>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)]">
                   {currentQuestion.board} • {currentQuestion.examContext}
@@ -549,8 +801,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => goToIndex(currentIdx - 1)}
-                    disabled={currentIdx === 0}
+                    onClick={() => goToIndex(safeIdx - 1)}
+                    disabled={safeIdx === 0}
                     className="px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-40 inline-flex items-center gap-1 cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" /> Anterior
@@ -565,12 +817,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     }
                     className="dream-btn-primary px-4 py-1.5 text-xs disabled:opacity-45 cursor-pointer"
                   >
-                    Confirmar Resposta
+                    Confirmar e Salvar Resposta
                   </button>
                   <button
                     type="button"
-                    onClick={() => goToIndex(currentIdx + 1)}
-                    disabled={currentIdx >= filteredQuestions.length - 1}
+                    onClick={() => goToIndex(safeIdx + 1)}
+                    disabled={safeIdx >= filteredQuestions.length - 1}
                     className="px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-40 inline-flex items-center gap-1 cursor-pointer"
                   >
                     Pular <ChevronRight className="w-4 h-4" />
@@ -595,25 +847,65 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                         <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
                       )}
                       <div>
-                        <div className="font-bold text-sm">
-                          {submissionFeedback.correct
-                            ? 'Resposta Correta!'
-                            : 'Resposta Incorreta — Confira a dedução abaixo'}
+                        <div className="font-bold text-sm flex flex-wrap items-center gap-2">
+                          <span>
+                            {submissionFeedback.correct
+                              ? 'Resposta Correta! (Salva no seu perfil ✓)'
+                              : 'Resposta Incorreta — Confira a dedução abaixo'}
+                          </span>
+                          {currentMtProgress && (
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                classifyEngineerLevel({
+                                  attempts: currentMtProgress.responses.length,
+                                  accuracyPct: Math.round(
+                                    (currentMtProgress.responses.filter(
+                                      (r) => r.correct
+                                    ).length /
+                                      Math.max(
+                                        1,
+                                        currentMtProgress.responses.length
+                                      )) *
+                                      100
+                                  ),
+                                  theta: currentMtProgress.theta,
+                                }).badgeCls
+                              }`}
+                            >
+                              {
+                                classifyEngineerLevel({
+                                  attempts: currentMtProgress.responses.length,
+                                  accuracyPct: Math.round(
+                                    (currentMtProgress.responses.filter(
+                                      (r) => r.correct
+                                    ).length /
+                                      Math.max(
+                                        1,
+                                        currentMtProgress.responses.length
+                                      )) *
+                                      100
+                                  ),
+                                  theta: currentMtProgress.theta,
+                                }).label
+                              }
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs font-mono text-[var(--text-secondary)]">
                           Domínio da matéria:{' '}
                           {((currentMtProgress?.pKnown ?? 0) * 100).toFixed(1)}% (
                           {submissionFeedback.deltaPKnown >= 0 ? '+' : ''}
                           {(submissionFeedback.deltaPKnown * 100).toFixed(1)}%) •
-                          θ̂ = {currentMtProgress?.theta.toFixed(2)}
+                          θ̂ = {currentMtProgress?.theta.toFixed(2)} •{' '}
+                          {currentMtProgress?.responses.length ?? 0} respondidas nesta matéria
                         </div>
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => goToIndex(currentIdx + 1)}
-                      disabled={currentIdx >= filteredQuestions.length - 1}
+                      onClick={() => goToIndex(safeIdx + 1)}
+                      disabled={safeIdx >= filteredQuestions.length - 1}
                       className="dream-btn-primary px-3.5 py-1.5 text-xs inline-flex items-center gap-1 disabled:opacity-40 cursor-pointer"
                     >
                       Próxima Questão <ChevronRight className="w-4 h-4" />
@@ -626,7 +918,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="p-3.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2">
                     <div className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
-                      Qual foi o motivo principal do erro?
+                      Qual foi o motivo principal do erro? (Salva automaticamente)
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                       {ERROR_TAGS.map((tag) => {
@@ -704,7 +996,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <aside className="lg:col-span-4 dream-card p-4 space-y-2.5 lg:sticky lg:top-16">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
-                  Folha de Rascunho & Unidades
+                  Folha de Rascunho (Salva Auto)
                 </span>
                 <button
                   type="button"
@@ -718,7 +1010,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 value={scratchText}
                 onChange={(e) => setScratchText(e.target.value)}
                 rows={14}
-                placeholder="Escreva seus dados do enunciado, conversões de unidades (MPa, kW, p.u., rad/s) e passagens algébricas antes de marcar a alternativa..."
+                placeholder="Escreva seus dados do enunciado, conversões de unidades (MPa, kW, p.u., rad/s) e passagens algébricas... Tudo aqui fica salvo automaticamente!"
                 className="w-full p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] font-mono text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
               />
             </aside>

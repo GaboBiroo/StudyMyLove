@@ -11,12 +11,98 @@ import {
 } from '../engine/psychometrics';
 import type {
   ErrorCategory,
+  ExamBoard,
   ExerciseQuestion,
   FsrsRating,
   UserStudyProfile,
 } from '../types/study';
 
 const STORAGE_KEY = 'studymylove_thaisa_zeroed_v3';
+const ACTIVE_SIMULADO_STORAGE_KEY = 'studymylove_active_simulado_v1';
+const EXERCISE_SESSION_STORAGE_KEY = 'studymylove_exercise_session_v1';
+
+export interface SavedSimuladoSessionState {
+  session: {
+    id: string;
+    bossId: 'dedede' | 'metaknight' | 'galactaknight';
+    name: string;
+    board: 'Cesgranrio' | 'Cebraspe' | 'Geral';
+    boardLabel: ExamBoard;
+    themeLabel: string;
+    untimed: boolean;
+    secPerQuestion: number;
+  };
+  questionIds: string[];
+  answersMap: Record<string, number | boolean | null>;
+  recordedQuestionIds?: string[];
+  cursorIdx: number;
+  remainingSec: number;
+  elapsedSec: number;
+  initialDurationSec: number;
+  savedAtISO: string;
+  paused?: boolean;
+}
+
+export interface SavedExerciseSessionState {
+  microtopicFilter: string;
+  boardFilter: string;
+  categoryFilter: string;
+  typeFilter: 'all' | 'mcq5' | 'cebraspe_tf';
+  onlyUnresolved: boolean;
+  currentIdx: number;
+  scratchText: string;
+  savedAtISO: string;
+}
+
+export function loadSavedSimuladoSession(): SavedSimuladoSessionState | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_SIMULADO_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedSimuladoSessionState;
+    if (!parsed || !parsed.session || !Array.isArray(parsed.questionIds)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveSimuladoSession(
+  state: SavedSimuladoSessionState
+): void {
+  try {
+    localStorage.setItem(ACTIVE_SIMULADO_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearActiveSimuladoSession(): void {
+  try {
+    localStorage.removeItem(ACTIVE_SIMULADO_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function loadSavedExerciseSession(): SavedExerciseSessionState | null {
+  try {
+    const raw = localStorage.getItem(EXERCISE_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SavedExerciseSessionState;
+  } catch {
+    return null;
+  }
+}
+
+export function saveExerciseSession(state: SavedExerciseSessionState): void {
+  try {
+    localStorage.setItem(EXERCISE_SESSION_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
 
 export function loadUserProfile(): UserStudyProfile {
   try {
@@ -99,8 +185,9 @@ export function recordQuestionAttempt(
   const responses = [...prev.responses, newRecord];
 
   // Combine prior theta softly with new responses so baseline doesn't wildly jump on 1 question
+  const recentWindow = responses.slice(-120);
   const irtResult = estimateThetaNewtonRaphson(
-    responses,
+    recentWindow,
     prev.theta,
     prev.theta * 0.65,
     1.6

@@ -5,6 +5,8 @@ import { QUESTIONS_MEC } from './questionsMec';
 import { QUESTIONS_ELE_AND_BASIC } from './questionsEleAndBasic';
 import { QUESTIONS_EUROPE_AND_ADVANCED_MEC } from './questionsEuropeAndAdvancedMec';
 import { QUESTIONS_EUROPE_AND_ADVANCED_ELE } from './questionsEuropeAndAdvancedEle';
+import { generateMassiveMecQuestions } from './massiveMecGenerator';
+import { generateMassiveEleAndBasicQuestions } from './massiveEleAndBasicGenerator';
 import { FLASHCARDS_BANK } from './flashcardsBank';
 import type {
   FlashcardProgress,
@@ -26,8 +28,10 @@ export const ALL_MICROTOPICS: Microtopic[] = [
 export const ALL_QUESTIONS = [
   ...QUESTIONS_MEC,
   ...QUESTIONS_EUROPE_AND_ADVANCED_MEC,
+  ...generateMassiveMecQuestions(595),
   ...QUESTIONS_ELE_AND_BASIC,
   ...QUESTIONS_EUROPE_AND_ADVANCED_ELE,
+  ...generateMassiveEleAndBasicQuestions(595),
 ];
 export const ALL_FLASHCARDS = FLASHCARDS_BANK;
 

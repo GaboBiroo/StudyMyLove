@@ -6,9 +6,13 @@ import {
   Clock,
   Compass,
   Infinity as InfinityIcon,
+  PauseCircle,
+  PlayCircle,
+  Save,
   ShieldAlert,
   Sparkles,
   Swords,
+  Trash2,
   Trophy,
   XCircle,
 } from 'lucide-react';
@@ -21,7 +25,13 @@ import {
   classifyEngineerLevel,
   evaluateSimulationScore,
 } from '../../engine/psychometrics';
-import { recordQuestionAttempt } from '../../utils/storage';
+import {
+  clearActiveSimuladoSession,
+  loadSavedSimuladoSession,
+  recordQuestionAttempt,
+  saveActiveSimuladoSession,
+  type SavedSimuladoSessionState,
+} from '../../utils/storage';
 import type {
   ExamBoard,
   ExamSimulationResult,
@@ -56,6 +66,7 @@ type ThemeScopeId =
   | 'mec'
   | 'ele'
   | 'multi'
+  | 'vestibular'
   | 'europa'
   | 'basico'
   | 'microtopic';
@@ -73,12 +84,12 @@ const THEME_SCOPES: Array<{
   {
     id: 'mec',
     label: 'Engenharia Mecânica (Termo, Fluidos, Sólidos & Máquinas)',
-    desc: '15 matérias de Mecânica — Termodinâmica, Mohr, Bombas, Vibrações, NR-13',
+    desc: '15 matérias de Mecânica — 600 questões por matéria (9.000 questões)',
   },
   {
     id: 'ele',
     label: 'Engenharia Elétrica (Potência, Circuitos, Máquinas & Proteção)',
-    desc: '8 matérias de Elétrica — Maxwell, Trifásicos, MIT, Síncronas, SEP, NR-10, Ex',
+    desc: '8 matérias de Elétrica — 600 questões por matéria (4.800 questões)',
   },
   {
     id: 'multi',
@@ -86,8 +97,13 @@ const THEME_SCOPES: Array<{
     desc: 'Conversores CC-CC/PWM, Controle PID/Bode/Routh e Cálculo Vetorial/Laplace',
   },
   {
+    id: 'vestibular',
+    label: 'Vestibulares de Engenharia (ITA, IME, FUVEST/USP, UNICAMP)',
+    desc: 'Questões de exatas e engenharia dos vestibulares mais exigentes do país',
+  },
+  {
     id: 'europa',
-    label: 'Provas & Processos Seletivos Europeus (CERN, ESA, EPSO, Equinor, CEng)',
+    label: 'Processos Seletivos Europeus (CERN, ESA, EPSO, Equinor, CEng)',
     desc: 'Questões de seleção de engenheiros na Europa (CERN, Agência Espacial Europeia, Offshore Mar do Norte, UE)',
   },
   {
@@ -97,8 +113,8 @@ const THEME_SCOPES: Array<{
   },
   {
     id: 'microtopic',
-    label: 'Escolher uma Matéria Específica (1 dos 28 temas)',
-    desc: 'Focar todas as questões do simulado em um único tema para medir seu nível nele',
+    label: 'Escolher uma Micro-Matéria Específica (600 questões na matéria)',
+    desc: 'Focar todas as questões do simulado em um único tema para medir seu nível Normal vs. Expert nele',
   },
 ];
 
@@ -114,14 +130,14 @@ const BOSSES: Array<{
 }> = [
   {
     id: 'dedede',
-    name: 'King Dedede • Cesgranrio (Petrobras / Transpetro)',
+    name: 'King Dedede • Concursos (Petrobras / Cesgranrio / FGV)',
     board: 'Cesgranrio',
     boardLabel: 'Cesgranrio',
-    title: 'Simulado Padrão Petrobras & BNDES (5 Alternativas A–E)',
+    title: 'Simulado Padrão Petrobras, Transpetro & BNDES (5 Alternativas A–E)',
     ruleSummary:
       'Regra Cesgranrio: +1 por acerto, 0 por erro, corte eliminatório mínimo de 50% no Bloco Básico (Português & Inglês Técnico).',
     secPerQuestion: 180,
-    maxQuestions: 20,
+    maxQuestions: 30,
   },
   {
     id: 'metaknight',
@@ -132,23 +148,29 @@ const BOSSES: Array<{
     ruleSummary:
       'Regra Cebraspe: +1 acerto, -1 erro, 0 em branco. Inclui botão explícito para deixar item em branco quando houver dúvida.',
     secPerQuestion: 105,
-    maxQuestions: 20,
+    maxQuestions: 30,
   },
   {
     id: 'galactaknight',
-    name: 'Galacta Knight • Seleção Europeia & Internacional',
+    name: 'Galacta Knight • Europa & Vestibulares (CERN / ESA / ITA / IME)',
     board: 'Geral',
     boardLabel: 'Europa — CERN / ESA',
-    title: 'Simulado Europeu (CERN, ESA, EPSO, Equinor Offshore & CEng)',
+    title: 'Simulado Internacional & Elite (CERN, ESA, Equinor, ITA & IME)',
     ruleSummary:
-      'Bateria com questões de processos seletivos de engenharia na Europa (Suíça, Holanda, Reino Unido, Mar do Norte e União Europeia).',
+      'Bateria com questões de processos seletivos europeus e vestibulares de engenharia de alta exigência.',
     secPerQuestion: 180,
-    maxQuestions: 25,
+    maxQuestions: 30,
   },
 ];
 
+const SIM_PAGE_WINDOW = 30;
+
 export function isEuropeanBoard(board: ExamBoard): boolean {
   return board.startsWith('Europa');
+}
+
+export function isVestibularBoard(board: ExamBoard): boolean {
+  return board.startsWith('Vestibular');
 }
 
 export const SimuladosView: React.FC<SimuladosViewProps> = ({
@@ -161,6 +183,15 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
     [profile.activeTrack]
   );
 
+  // Fast O(1) lookup map from question ID to ExerciseQuestion
+  const questionByIdMap = useMemo(() => {
+    const map = new Map<string, ExerciseQuestion>();
+    for (const q of ALL_QUESTIONS) {
+      map.set(q.id, q);
+    }
+    return map;
+  }, []);
+
   // Custom Theme Exam Builder State
   const [selectedThemeScope, setSelectedThemeScope] =
     useState<ThemeScopeId>('all');
@@ -170,6 +201,10 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
   const [customUntimed, setCustomUntimed] = useState<boolean>(true);
   const [customQuestionLimit, setCustomQuestionLimit] = useState<number>(28);
 
+  // Check if there is a saved Simulado in localStorage
+  const [savedSimulado, setSavedSimulado] =
+    useState<SavedSimuladoSessionState | null>(() => loadSavedSimuladoSession());
+
   // Active Exam State
   const [activeSession, setActiveSession] =
     useState<ActiveSimulationSession | null>(null);
@@ -177,16 +212,76 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
   const [answersMap, setAnswersMap] = useState<
     Record<string, number | boolean | null>
   >({});
+  const [recordedIdsSet, setRecordedIdsSet] = useState<Set<string>>(
+    () => new Set()
+  );
   const [cursorIdx, setCursorIdx] = useState(0);
   const [remainingSec, setRemainingSec] = useState(0);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [initialDurationSec, setInitialDurationSec] = useState(1);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string>('');
 
   const [battleResult, setBattleResult] = useState<{
     summary: ExamSimulationResult;
     questions: ExerciseQuestion[];
     userAnswers: Record<string, number | boolean | null>;
   } | null>(null);
+
+  // Auto-restore active (non-paused) Simulado if page was refreshed mid-exam
+  useEffect(() => {
+    const saved = loadSavedSimuladoSession();
+    if (saved && !saved.paused && !activeSession) {
+      const qs = saved.questionIds
+        .map((id) => questionByIdMap.get(id))
+        .filter((q): q is ExerciseQuestion => Boolean(q));
+      if (qs.length > 0) {
+        setActiveSession(saved.session);
+        setBattleQuestions(qs);
+        setAnswersMap(saved.answersMap ?? {});
+        setRecordedIdsSet(new Set(saved.recordedQuestionIds ?? []));
+        setCursorIdx(Math.min(saved.cursorIdx ?? 0, qs.length - 1));
+        setRemainingSec(saved.remainingSec ?? 1800);
+        setElapsedSec(saved.elapsedSec ?? 0);
+        setInitialDurationSec(saved.initialDurationSec ?? 1800);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save active Simulado to localStorage whenever answers, cursor, or session change
+  useEffect(() => {
+    if (!activeSession || battleQuestions.length === 0) return;
+    const stateToSave: SavedSimuladoSessionState = {
+      session: activeSession,
+      questionIds: battleQuestions.map((q) => q.id),
+      answersMap,
+      recordedQuestionIds: Array.from(recordedIdsSet),
+      cursorIdx,
+      remainingSec,
+      elapsedSec,
+      initialDurationSec,
+      savedAtISO: new Date().toISOString(),
+      paused: false,
+    };
+    saveActiveSimuladoSession(stateToSave);
+    setSavedSimulado(stateToSave);
+    setLastAutoSaveTime(
+      new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    );
+  }, [
+    activeSession,
+    battleQuestions,
+    answersMap,
+    recordedIdsSet,
+    cursorIdx,
+    remainingSec,
+    elapsedSec,
+    initialDurationSec,
+  ]);
 
   // Pool of questions matching the Custom Theme Builder
   const customFilteredPool = useMemo(() => {
@@ -197,6 +292,9 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
       }
       if (selectedThemeScope === 'europa') {
         return isEuropeanBoard(q.board);
+      }
+      if (selectedThemeScope === 'vestibular') {
+        return isVestibularBoard(q.board);
       }
       if (selectedThemeScope === 'all') {
         return trackIds.has(q.microtopicId);
@@ -216,6 +314,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
     setActiveSession(session);
     setBattleQuestions(questions);
     setAnswersMap({});
+    setRecordedIdsSet(new Set());
     setCursorIdx(0);
     setInitialDurationSec(totalSec);
     setRemainingSec(totalSec);
@@ -223,11 +322,78 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
     setBattleResult(null);
   };
 
-  // Launch Untimed Comprehensive Diagnostic (1 per topic, 2 per topic, all, or Europe)
-  const startUntimedDiagnostic = (
-    mode: '1_per_topic' | '2_per_topic' | 'all_bank' | 'europe_all'
+  const resumeSavedSimulado = () => {
+    if (!savedSimulado) return;
+    const qs = savedSimulado.questionIds
+      .map((id) => questionByIdMap.get(id))
+      .filter((q): q is ExerciseQuestion => Boolean(q));
+    if (qs.length === 0) {
+      clearActiveSimuladoSession();
+      setSavedSimulado(null);
+      return;
+    }
+    setActiveSession(savedSimulado.session);
+    setBattleQuestions(qs);
+    setAnswersMap(savedSimulado.answersMap ?? {});
+    setRecordedIdsSet(new Set(savedSimulado.recordedQuestionIds ?? []));
+    setCursorIdx(Math.min(savedSimulado.cursorIdx ?? 0, qs.length - 1));
+    setRemainingSec(savedSimulado.remainingSec ?? 1800);
+    setElapsedSec(savedSimulado.elapsedSec ?? 0);
+    setInitialDurationSec(savedSimulado.initialDurationSec ?? 1800);
+    setBattleResult(null);
+  };
+
+  const pauseAndSaveForLater = () => {
+    if (!activeSession || battleQuestions.length === 0) return;
+    const pausedState: SavedSimuladoSessionState = {
+      session: activeSession,
+      questionIds: battleQuestions.map((q) => q.id),
+      answersMap,
+      recordedQuestionIds: Array.from(recordedIdsSet),
+      cursorIdx,
+      remainingSec,
+      elapsedSec,
+      initialDurationSec,
+      savedAtISO: new Date().toISOString(),
+      paused: true,
+    };
+    saveActiveSimuladoSession(pausedState);
+    setSavedSimulado(pausedState);
+    setActiveSession(null);
+  };
+
+  // Real-time answer selection: saves both to the Simulado sheet AND immediately records to profile!
+  const handleSelectAnswer = (
+    question: ExerciseQuestion,
+    val: number | boolean | null
   ) => {
-    const trackIds = new Set(trackMicrotopics.map((m) => m.id));
+    setAnswersMap((prev) => ({ ...prev, [question.id]: val }));
+
+    // Immediately persist to profile.microtopics if not yet recorded in this session
+    if (val !== null && !recordedIdsSet.has(question.id)) {
+      const correct =
+        question.questionType === 'mcq5'
+          ? val === question.correctIndex
+          : val === question.correctBoolean;
+      const { nextProfile } = recordQuestionAttempt(profile, {
+        question,
+        correct,
+        timeSpentSec: 60,
+        wasGuess: false,
+      });
+      onUpdateProfile(nextProfile);
+      setRecordedIdsSet((prev) => {
+        const next = new Set(prev);
+        next.add(question.id);
+        return next;
+      });
+    }
+  };
+
+  // Launch Untimed Comprehensive Diagnostic
+  const startUntimedDiagnostic = (
+    mode: '1_per_topic' | '3_per_topic' | 'vestibular_56' | 'europe_56'
+  ) => {
     let picked: ExerciseQuestion[] = [];
     let title = '';
     let themeLabel = '';
@@ -239,23 +405,33 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
       }
       title = `Diagnóstico Geral Sem Tempo (${picked.length} questões)`;
       themeLabel = 'Todas as Matérias (1 por tema)';
-    } else if (mode === '2_per_topic') {
+    } else if (mode === '3_per_topic') {
       for (const mt of trackMicrotopics) {
         const qs = ALL_QUESTIONS.filter(
           (item) => item.microtopicId === mt.id
-        ).slice(0, 2);
+        ).slice(0, 3);
         picked.push(...qs);
       }
       title = `Diagnóstico Aprofundado Sem Tempo (${picked.length} questões)`;
-      themeLabel = 'Todas as Matérias (2 por tema)';
-    } else if (mode === 'europe_all') {
-      picked = ALL_QUESTIONS.filter((q) => isEuropeanBoard(q.board));
+      themeLabel = 'Todas as Matérias (3 por tema)';
+    } else if (mode === 'europe_56') {
+      for (const mt of trackMicrotopics) {
+        const qs = ALL_QUESTIONS.filter(
+          (item) => item.microtopicId === mt.id && isEuropeanBoard(item.board)
+        ).slice(0, 2);
+        picked.push(...qs);
+      }
       title = `Diagnóstico Europeu Sem Tempo (${picked.length} questões)`;
       themeLabel = 'Processos Seletivos Europeus (CERN / ESA / EPSO / Offshore)';
     } else {
-      picked = ALL_QUESTIONS.filter((q) => trackIds.has(q.microtopicId));
-      title = `Super Diagnóstico Completo (${picked.length} questões)`;
-      themeLabel = 'Banco Completo da Trilha';
+      for (const mt of trackMicrotopics) {
+        const qs = ALL_QUESTIONS.filter(
+          (item) => item.microtopicId === mt.id && isVestibularBoard(item.board)
+        ).slice(0, 2);
+        picked.push(...qs);
+      }
+      title = `Diagnóstico Vestibulares ITA/IME/USP (${picked.length} questões)`;
+      themeLabel = 'Vestibulares de Engenharia (ITA / IME / FUVEST / UNICAMP)';
     }
 
     launchSimulation({
@@ -265,7 +441,11 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
         name: title,
         board: 'Geral',
         boardLabel:
-          mode === 'europe_all' ? 'Europa — CERN / ESA' : 'Cesgranrio',
+          mode === 'europe_56'
+            ? 'Europa — CERN / ESA'
+            : mode === 'vestibular_56'
+              ? 'Vestibular — ITA / IME'
+              : 'Cesgranrio',
         themeLabel,
         untimed: true,
         secPerQuestion: 180,
@@ -277,8 +457,8 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
   // Launch Custom Theme / Subject Simulation
   const startCustomThemeExam = () => {
     const limit =
-      customQuestionLimit >= 999
-        ? customFilteredPool.length
+      customQuestionLimit >= 9999
+        ? Math.min(600, customFilteredPool.length)
         : Math.min(customQuestionLimit, customFilteredPool.length);
 
     // Distribute evenly across microtopics in pool so all subtopics get represented
@@ -291,7 +471,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
     const balanced: ExerciseQuestion[] = [];
     let round = 0;
-    while (balanced.length < limit && round < 20) {
+    while (balanced.length < limit && round < 650) {
       let addedInRound = 0;
       for (const list of byMt.values()) {
         if (round < list.length && balanced.length < limit) {
@@ -314,13 +494,17 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
       session: {
         id: `custom-${Date.now()}`,
         bossId:
-          selectedThemeScope === 'europa' ? 'galactaknight' : 'dedede',
+          selectedThemeScope === 'europa' || selectedThemeScope === 'vestibular'
+            ? 'galactaknight'
+            : 'dedede',
         name: `Simulado por Tema: ${themeLabel}`,
         board: 'Geral',
         boardLabel:
           selectedThemeScope === 'europa'
             ? 'Europa — CERN / ESA'
-            : 'Cesgranrio',
+            : selectedThemeScope === 'vestibular'
+              ? 'Vestibular — ITA / IME'
+              : 'Cesgranrio',
         themeLabel,
         untimed: customUntimed,
         secPerQuestion: 165,
@@ -337,34 +521,28 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
     if (boss.id === 'dedede') {
       const basicMcq = ALL_QUESTIONS.filter(
         (q) => q.microtopicId.startsWith('b-') && q.questionType === 'mcq5'
-      ).slice(0, 4);
+      ).slice(0, 6);
       const techMcq = ALL_QUESTIONS.filter(
         (q) =>
           q.questionType === 'mcq5' &&
           trackIds.has(q.microtopicId) &&
           !q.microtopicId.startsWith('b-') &&
-          !isEuropeanBoard(q.board)
+          !isEuropeanBoard(q.board) &&
+          !isVestibularBoard(q.board)
       );
       picked = [...basicMcq, ...techMcq].slice(0, boss.maxQuestions);
     } else if (boss.id === 'metaknight') {
       const tfTrack = ALL_QUESTIONS.filter(
         (q) => q.questionType === 'cebraspe_tf' && trackIds.has(q.microtopicId)
       );
-      const tfAll = ALL_QUESTIONS.filter(
-        (q) => q.questionType === 'cebraspe_tf'
-      );
-      picked = (tfTrack.length >= 6 ? tfTrack : tfAll).slice(
-        0,
-        boss.maxQuestions
-      );
+      picked = tfTrack.slice(0, boss.maxQuestions);
     } else {
-      const euroQs = ALL_QUESTIONS.filter(
-        (q) => isEuropeanBoard(q.board) && trackIds.has(q.microtopicId)
+      const euroAndVest = ALL_QUESTIONS.filter(
+        (q) =>
+          (isEuropeanBoard(q.board) || isVestibularBoard(q.board)) &&
+          trackIds.has(q.microtopicId)
       );
-      picked =
-        euroQs.length > 0
-          ? euroQs.slice(0, boss.maxQuestions)
-          : ALL_QUESTIONS.slice(0, boss.maxQuestions);
+      picked = euroAndVest.slice(0, boss.maxQuestions);
     }
 
     launchSimulation({
@@ -412,13 +590,16 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
       perItemStatus.push({ isBasic, status: correct ? 'correct' : 'wrong' });
 
-      const { nextProfile } = recordQuestionAttempt(runningProfile, {
-        question: q,
-        correct,
-        timeSpentSec: avgSecPerItem,
-        wasGuess: false,
-      });
-      runningProfile = nextProfile;
+      // Only record if not already recorded in real-time during handleSelectAnswer
+      if (!recordedIdsSet.has(q.id)) {
+        const { nextProfile } = recordQuestionAttempt(runningProfile, {
+          question: q,
+          correct,
+          timeSpentSec: avgSecPerItem,
+          wasGuess: false,
+        });
+        runningProfile = nextProfile;
+      }
     }
 
     const evalRes = evaluateSimulationScore({
@@ -426,13 +607,14 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
       answers: perItemStatus,
     });
 
+    const answeredTotal = evalRes.correctCount + evalRes.wrongCount;
     const accuracyPct =
-      battleQuestions.length > 0
-        ? Math.round((evalRes.correctCount / battleQuestions.length) * 100)
+      answeredTotal > 0
+        ? Math.round((evalRes.correctCount / answeredTotal) * 100)
         : 0;
 
     const levelDiag = classifyEngineerLevel({
-      attempts: evalRes.correctCount + evalRes.wrongCount,
+      attempts: answeredTotal,
       accuracyPct,
     });
 
@@ -470,6 +652,9 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
       examHistory: [simResult, ...runningProfile.examHistory].slice(0, 30),
     });
 
+    clearActiveSimuladoSession();
+    setSavedSimulado(null);
+
     setBattleResult({
       summary: simResult,
       questions: battleQuestions,
@@ -505,6 +690,15 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
   const currentQ = battleQuestions[cursorIdx];
 
+  // Paginated strip inside active simulation
+  const simPageStart =
+    Math.floor(cursorIdx / SIM_PAGE_WINDOW) * SIM_PAGE_WINDOW;
+  const simPageEnd = Math.min(
+    battleQuestions.length,
+    simPageStart + SIM_PAGE_WINDOW
+  );
+  const visibleSimQuestions = battleQuestions.slice(simPageStart, simPageEnd);
+
   // Breakdown by microtopic for the post-exam report
   const resultTopicBreakdown = useMemo(() => {
     if (!battleResult) return [];
@@ -536,9 +730,13 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
     return Array.from(map.entries()).map(([mtId, stats]) => {
       const mt = ALL_MICROTOPICS.find((m) => m.id === mtId);
-      const pct = Math.round((stats.correct / Math.max(1, stats.total)) * 100);
+      const answered = stats.correct + stats.wrong;
+      const pct =
+        answered > 0
+          ? Math.round((stats.correct / answered) * 100)
+          : 0;
       const lvl = classifyEngineerLevel({
-        attempts: stats.total,
+        attempts: answered,
         accuracyPct: pct,
       });
       return {
@@ -556,19 +754,73 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
     <div className="space-y-6">
       {!activeSession && !battleResult && (
         <>
+          {/* 0. RESUME SAVED IN-PROGRESS SIMULADO BANNER (IF ANY) */}
+          {savedSimulado && (
+            <section className="dream-card p-5 border-2 border-[var(--kirby-pink)] bg-[var(--kirby-pink-soft)]/35 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--kirby-pink)]">
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Simulado em Andamento Salvo Automaticamente</span>
+                </div>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
+                  {savedSimulado.session.name}
+                </h2>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Você já respondeu{' '}
+                  <strong>
+                    {
+                      Object.values(savedSimulado.answersMap ?? {}).filter(
+                        (v) => v !== null && v !== undefined
+                      ).length
+                    }{' '}
+                    de {savedSimulado.questionIds.length} questões
+                  </strong>{' '}
+                  (parou na questão #{savedSimulado.cursorIdx + 1}). Todas as respostas já foram salvas!
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={resumeSavedSimulado}
+                  className="dream-btn-primary px-4 py-2 text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Continuar de Onde Parou
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearActiveSimuladoSession();
+                    setSavedSimulado(null);
+                  }}
+                  title="Descartar simulado em andamento"
+                  className="p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-rose-600 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* 1. UNTIMED COMPREHENSIVE DIAGNOSTIC BANNER */}
           <section className="dream-card p-5 sm:p-6 space-y-4 border-[var(--border-strong)] bg-gradient-to-br from-[var(--bg-surface)] via-[var(--bg-surface)] to-[var(--bg-accent-soft)]">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1.5">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] text-[11px] font-bold text-[var(--kirby-pink)]">
-                  <InfinityIcon className="w-3.5 h-3.5" />
-                  Modo Sem Limite de Tempo • Medidor Oficial de Nível
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[var(--kirby-pink-soft)] border border-[var(--border-strong)] text-[11px] font-bold text-[var(--kirby-pink)]">
+                    <InfinityIcon className="w-3.5 h-3.5" />
+                    Modo Sem Limite de Tempo • Salva a Cada Questão Respondida
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-semibold text-emerald-700">
+                    <Save className="w-3 h-3" /> Auto-Save Ativo
+                  </span>
                 </div>
                 <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
                   Diagnóstico de Nível: Engenheira Normal vs. Engenheira Expert
                 </h1>
                 <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-3xl leading-relaxed">
-                  Como o seu perfil começa <strong>100% zerado</strong>, escolha abaixo uma bateria diagnóstica <strong>sem limite de tempo</strong> para responder com calma. Ao concluir, você recebe seu diagnóstico completo classificando cada área como <strong>Engenheira em Base</strong>, <strong>Engenheira Normal (Plena)</strong>, <strong>Engenheira Sênior</strong> ou <strong>Engenheira Expert</strong>.
+                  Faça no seu ritmo, <strong>sem limite de tempo</strong>. Conforme você marca cada questão, <strong>seu progresso vai salvando automaticamente</strong> (você pode até pausar e continuar em outro dia). Ao finalizar, veja seu nível real (<strong>Engenheira Normal / Plena</strong>, <strong>Sênior</strong> ou <strong>Expert</strong>).
                 </p>
               </div>
 
@@ -585,7 +837,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
               >
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[var(--kirby-pink)]">
-                    <span>DIAGNÓSTICO RÁPIDO</span>
+                    <span>DIAGNÓSTICO GERAL</span>
                     <span>∞ SEM TEMPO</span>
                   </div>
                   <div className="text-sm font-bold text-[var(--text-primary)] mt-1 group-hover:text-[var(--kirby-pink)]">
@@ -602,29 +854,29 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => startUntimedDiagnostic('2_per_topic')}
+                onClick={() => startUntimedDiagnostic('3_per_topic')}
                 className="p-4 rounded-xl bg-[var(--bg-surface)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-left transition flex flex-col justify-between gap-3 cursor-pointer group"
               >
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[var(--kirby-pink)]">
-                    <span>DIAGNÓSTICO PROFUNDO</span>
+                    <span>SUPER DIAGNÓSTICO</span>
                     <span>∞ SEM TEMPO</span>
                   </div>
                   <div className="text-sm font-bold text-[var(--text-primary)] mt-1 group-hover:text-[var(--kirby-pink)]">
-                    {trackMicrotopics.length * 2} Questões (2 por Matéria)
+                    {trackMicrotopics.length * 3} Questões (3 por Matéria)
                   </div>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">
-                    Avaliação dupla por matéria para calibrar com alta precisão seu nível Normal vs. Expert.
+                    Avaliação tripla por matéria para calibrar com alta precisão seu nível Normal vs. Expert.
                   </p>
                 </div>
                 <span className="dream-btn-primary px-3 py-1.5 text-xs text-center">
-                  Iniciar ({trackMicrotopics.length * 2} itens)
+                  Iniciar ({trackMicrotopics.length * 3} itens)
                 </span>
               </button>
 
               <button
                 type="button"
-                onClick={() => startUntimedDiagnostic('europe_all')}
+                onClick={() => startUntimedDiagnostic('europe_56')}
                 className="p-4 rounded-xl bg-[var(--bg-surface)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-left transition flex flex-col justify-between gap-3 cursor-pointer group"
               >
                 <div>
@@ -633,9 +885,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     <span>∞ SEM TEMPO</span>
                   </div>
                   <div className="text-sm font-bold text-[var(--text-primary)] mt-1 group-hover:text-[var(--kirby-pink)]">
-                    Processos Seletivos Europeus (
-                    {ALL_QUESTIONS.filter((q) => isEuropeanBoard(q.board)).length}{' '}
-                    questões)
+                    Processos Seletivos Europeus ({trackMicrotopics.length * 2} itens)
                   </div>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">
                     Questões estilo CERN, ESA, EPSO (União Europeia), Equinor/Shell Offshore e CEng.
@@ -648,23 +898,23 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => startUntimedDiagnostic('all_bank')}
+                onClick={() => startUntimedDiagnostic('vestibular_56')}
                 className="p-4 rounded-xl bg-[var(--bg-surface)] hover:border-[var(--kirby-pink)] border border-[var(--border-subtle)] text-left transition flex flex-col justify-between gap-3 cursor-pointer group"
               >
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[var(--warp-gold)]">
-                    <span>BANCO GIGANTE COMPLETO</span>
+                    <span>VESTIBULARES ELITE 🎓</span>
                     <span>∞ SEM TEMPO</span>
                   </div>
                   <div className="text-sm font-bold text-[var(--text-primary)] mt-1 group-hover:text-[var(--kirby-pink)]">
-                    Maratona Completa ({ALL_QUESTIONS.length} Questões)
+                    ITA / IME / FUVEST / UNICAMP ({trackMicrotopics.length * 2} itens)
                   </div>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">
-                    Todas as {ALL_QUESTIONS.length} questões do banco em uma única bateria sem limite de tempo.
+                    Bateria analítica com questões de engenharia/exatas padrão ITA, IME, USP e UNICAMP.
                   </p>
                 </div>
                 <span className="dream-btn-primary px-3 py-1.5 text-xs text-center">
-                  Iniciar Todas ({ALL_QUESTIONS.length})
+                  Iniciar Prova ITA/IME/USP
                 </span>
               </button>
             </div>
@@ -677,15 +927,15 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                 <div className="flex items-center gap-2">
                   <Compass className="w-4 h-4 text-[var(--kirby-pink)]" />
                   <h2 className="text-base font-bold text-[var(--text-primary)]">
-                    Simulado Personalizado por Tema ou Matéria
+                    Simulado Personalizado por Tema ou Micro-Matéria (Até 600 Questões por Tema)
                   </h2>
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Escolha uma grande área ou uma matéria específica para descobrir se você já está no nível <strong>Engenheira Normal</strong> ou <strong>Engenheira Expert</strong> naquele tema.
+                  Escolha uma grande área ou qualquer uma das 28 micro-matérias (cada uma tem <strong>600 questões</strong> de vestibular, concurso e processo seletivo) para medir seu nível <strong>Engenheira Normal</strong> ou <strong>Expert</strong>.
                 </p>
               </div>
               <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-                {customFilteredPool.length} questões disponíveis no filtro
+                {customFilteredPool.length.toLocaleString('pt-BR')} questões disponíveis no filtro
               </span>
             </div>
 
@@ -712,7 +962,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                 {selectedThemeScope === 'microtopic' && (
                   <div className="pt-2">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[var(--kirby-pink)] mb-1">
-                      Selecione a Matéria Específica:
+                      Selecione a Micro-Matéria (600 questões cada):
                     </label>
                     <select
                       value={selectedMicrotopicId}
@@ -721,7 +971,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     >
                       {ALL_MICROTOPICS.map((mt) => (
                         <option key={mt.id} value={mt.id}>
-                          {mt.code} — {mt.title}
+                          {mt.code} — {mt.title} (600 questões)
                         </option>
                       ))}
                     </select>
@@ -779,26 +1029,20 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                   3. Quantidade de Questões
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {[5, 10, 20, 35, 50, 999].map((n) => {
-                    const label =
-                      n === 999
-                        ? `Todas (${customFilteredPool.length})`
-                        : `${n}`;
-                    return (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setCustomQuestionLimit(n)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition cursor-pointer ${
-                          customQuestionLimit === n
-                            ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
-                            : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+                  {[10, 20, 35, 60, 100, 250, 600].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setCustomQuestionLimit(n)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition cursor-pointer ${
+                        customQuestionLimit === n
+                          ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
+                          : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {n === 600 ? '600 (Completa)' : `${n}`}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -904,6 +1148,10 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     • {answeredCount}/{battleQuestions.length} respondidas (
                     {progressPct}%)
                   </span>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 inline-flex items-center gap-1">
+                    <Save className="w-3 h-3" />
+                    Salvo auto {lastAutoSaveTime ? `(${lastAutoSaveTime})` : '✓'}
+                  </span>
                 </div>
                 <div className="w-56 h-2 bg-[var(--bg-subtle)] rounded-full overflow-hidden">
                   <div
@@ -914,11 +1162,11 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               {activeSession.untimed ? (
                 <div className="px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] font-mono text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                   <InfinityIcon className="w-4 h-4 text-[var(--kirby-pink)]" />
-                  <span>Sem Limite • Tempo decorrido:</span>
+                  <span>Sem Limite •</span>
                   <span>
                     {Math.floor(elapsedSec / 60)}:
                     {String(elapsedSec % 60).padStart(2, '0')}
@@ -934,43 +1182,76 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
 
               <button
                 type="button"
+                onClick={pauseAndSaveForLater}
+                className="px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--kirby-pink-soft)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <PauseCircle className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+                Pausar & Continuar Depois
+              </button>
+
+              <button
+                type="button"
                 onClick={finalizeBattle}
                 className="dream-btn-primary px-4 py-1.5 text-xs cursor-pointer"
               >
                 Finalizar & Calcular Meu Nível
               </button>
-              <button
-                type="button"
-                onClick={() => setActiveSession(null)}
-                className="px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-secondary)] cursor-pointer"
-              >
-                Cancelar
-              </button>
             </div>
           </div>
 
           <div className="dream-card p-5 space-y-4">
-            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1">
-              {battleQuestions.map((q, idx) => {
-                const answered =
-                  answersMap[q.id] !== undefined && answersMap[q.id] !== null;
-                return (
+            {/* Paginated Question Strip */}
+            <div className="space-y-2 pb-2 border-b border-[var(--border-subtle)]">
+              {battleQuestions.length > SIM_PAGE_WINDOW && (
+                <div className="flex items-center justify-between text-xs font-mono text-[var(--text-secondary)]">
                   <button
-                    key={q.id}
                     type="button"
-                    onClick={() => setCursorIdx(idx)}
-                    className={`w-7 h-7 rounded-md text-xs font-mono font-bold border transition cursor-pointer ${
-                      idx === cursorIdx
-                        ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
-                        : answered
-                          ? 'bg-[var(--kirby-pink-soft)] text-[var(--text-primary)] border-[var(--border-strong)]'
-                          : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
-                    }`}
+                    disabled={simPageStart === 0}
+                    onClick={() =>
+                      setCursorIdx(Math.max(0, simPageStart - SIM_PAGE_WINDOW))
+                    }
+                    className="px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] disabled:opacity-40 cursor-pointer"
                   >
-                    {idx + 1}
+                    « Anteriores {SIM_PAGE_WINDOW}
                   </button>
-                );
-              })}
+                  <span>
+                    Questões {simPageStart + 1}–{simPageEnd} de{' '}
+                    {battleQuestions.length}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={simPageEnd >= battleQuestions.length}
+                    onClick={() => setCursorIdx(simPageEnd)}
+                    className="px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-subtle)] disabled:opacity-40 cursor-pointer"
+                  >
+                    Próximas {SIM_PAGE_WINDOW} »
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-1">
+                {visibleSimQuestions.map((q, localIdx) => {
+                  const idx = simPageStart + localIdx;
+                  const answered =
+                    answersMap[q.id] !== undefined && answersMap[q.id] !== null;
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => setCursorIdx(idx)}
+                      className={`min-w-7 h-7 px-1.5 rounded-md text-xs font-mono font-bold border transition cursor-pointer ${
+                        idx === cursorIdx
+                          ? 'bg-[var(--kirby-pink)] text-white border-[var(--kirby-pink)]'
+                          : answered
+                            ? 'bg-[var(--kirby-pink-soft)] text-[var(--text-primary)] border-[var(--border-strong)]'
+                            : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-[var(--text-secondary)]">
@@ -1007,9 +1288,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     <button
                       key={idx}
                       type="button"
-                      onClick={() =>
-                        setAnswersMap((m) => ({ ...m, [currentQ.id]: idx }))
-                      }
+                      onClick={() => handleSelectAnswer(currentQ, idx)}
                       className={`w-full text-left p-3 rounded-lg border flex items-start gap-3 transition cursor-pointer ${
                         selected
                           ? 'bg-[var(--kirby-pink-soft)] border-[var(--kirby-pink)] text-[var(--text-primary)]'
@@ -1042,9 +1321,7 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     <button
                       key={String(opt.label)}
                       type="button"
-                      onClick={() =>
-                        setAnswersMap((m) => ({ ...m, [currentQ.id]: opt.val }))
-                      }
+                      onClick={() => handleSelectAnswer(currentQ, opt.val)}
                       className={`p-3 rounded-lg border text-xs font-bold transition cursor-pointer ${
                         selected
                           ? 'bg-[var(--kirby-pink-soft)] border-[var(--kirby-pink)] text-[var(--text-primary)]'
@@ -1099,18 +1376,17 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
       {battleResult && (
         <section className="space-y-5">
           {(() => {
+            const answered =
+              battleResult.summary.correctCount +
+              battleResult.summary.wrongCount;
             const pct =
-              battleResult.summary.totalQuestions > 0
+              answered > 0
                 ? Math.round(
-                    (battleResult.summary.correctCount /
-                      battleResult.summary.totalQuestions) *
-                      100
+                    (battleResult.summary.correctCount / answered) * 100
                   )
                 : 0;
             const overallLevel = classifyEngineerLevel({
-              attempts:
-                battleResult.summary.correctCount +
-                battleResult.summary.wrongCount,
+              attempts: answered,
               accuracyPct: pct,
             });
 
@@ -1132,7 +1408,9 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-mono font-bold uppercase text-[var(--kirby-pink)]">
-                          Laudo de Nível • {battleResult.summary.themeLabel ?? battleResult.summary.board}
+                          Laudo de Nível Salvo •{' '}
+                          {battleResult.summary.themeLabel ??
+                            battleResult.summary.board}
                         </span>
                         <span
                           className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${overallLevel.badgeCls}`}
@@ -1141,8 +1419,8 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                         </span>
                       </div>
                       <h2 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
-                        Taxa de Acerto: {pct}% ({battleResult.summary.correctCount} acertos de{' '}
-                        {battleResult.summary.totalQuestions} questões)
+                        Taxa de Acerto: {pct}% ({battleResult.summary.correctCount}{' '}
+                        acertos em {answered} respondidas)
                       </h2>
                       <p className="text-xs text-[var(--text-secondary)]">
                         {overallLevel.description}
@@ -1172,7 +1450,8 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                 <div className="space-y-2.5">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
                     <Award className="w-4 h-4 text-[var(--kirby-pink)]" />
-                    Diagnóstico de Nível por Matéria Avaliada ({resultTopicBreakdown.length} temas)
+                    Diagnóstico de Nível por Matéria Avaliada (
+                    {resultTopicBreakdown.length} temas)
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                     {resultTopicBreakdown.map((item) => (
@@ -1215,12 +1494,13 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
             );
           })()}
 
-          {/* Detailed Step-by-Step Solution Review */}
+          {/* Detailed Step-by-Step Solution Review (First 60 items rendered cleanly) */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-[var(--text-primary)]">
-              Gabarito Analítico Comentado ({battleResult.questions.length} questões)
+              Gabarito Analítico Comentado (
+              {battleResult.questions.length} questões)
             </h3>
-            {battleResult.questions.map((q, idx) => {
+            {battleResult.questions.slice(0, 60).map((q, idx) => {
               const given = battleResult.userAnswers[q.id];
               const isBlank = given === undefined || given === null;
               const isCorrect =
@@ -1244,10 +1524,10 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
                     </span>
                     <span className="font-mono text-[var(--text-secondary)]">
                       {isCorrect
-                        ? '✓ Acertou'
+                        ? '✓ Acertou (Salvo)'
                         : isBlank
                           ? 'Em Branco'
-                          : '✗ Errou'}
+                          : '✗ Errou (Salvo)'}
                     </span>
                   </div>
                   <MathMarkdown
@@ -1280,13 +1560,14 @@ export const SimuladosView: React.FC<SimuladosViewProps> = ({
         <section className="dream-card p-5 space-y-3">
           <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Trophy className="w-4 h-4 text-[var(--warp-gold)]" />
-            Histórico de Diagnósticos e Simulados ({profile.examHistory.length})
+            Histórico de Diagnósticos e Simulados Salvos ({profile.examHistory.length})
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {profile.examHistory.map((h) => {
+              const answered = h.correctCount + h.wrongCount;
               const pct =
-                h.totalQuestions > 0
-                  ? Math.round((h.correctCount / h.totalQuestions) * 100)
+                answered > 0
+                  ? Math.round((h.correctCount / answered) * 100)
                   : 0;
               return (
                 <div

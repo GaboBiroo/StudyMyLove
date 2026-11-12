@@ -32,6 +32,8 @@ export type ExamBoard =
   | 'FCC'
   | 'Marinha CP-CEM'
   | 'UNIP Nivelamento'
+  | 'Vestibular — ITA / IME'
+  | 'Vestibular — FUVEST / UNICAMP'
   | 'Europa — CERN / ESA'
   | 'Europa — EPSO / UE'
   | 'Europa — Energy Offshore (Equinor/Shell)'

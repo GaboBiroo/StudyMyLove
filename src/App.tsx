@@ -86,7 +86,7 @@ const NAV_GROUPS: Array<{
       {
         id: 'exercicios',
         label: 'Banco de Questões',
-        subtitle: '56 Questões Resolvidas',
+        subtitle: '16.800 Questões Comentadas',
         icon: Zap,
       },
       {
@@ -98,7 +98,7 @@ const NAV_GROUPS: Array<{
       {
         id: 'simulados',
         label: 'Simulados de Banca',
-        subtitle: 'Cesgranrio & Cebraspe',
+        subtitle: 'Vestibular, Concurso & Europa',
         icon: Swords,
       },
       {
@@ -289,13 +289,18 @@ export function App() {
         )
     ).slice(0, 10);
 
-    const questions = ALL_QUESTIONS.filter(
-      (item) =>
+    const questions: typeof ALL_QUESTIONS = [];
+    for (const item of ALL_QUESTIONS) {
+      if (
         item.statementMarkdown.toLowerCase().includes(q) ||
         item.board.toLowerCase().includes(q) ||
         item.examContext.toLowerCase().includes(q) ||
         (item.relatedNorms ?? []).some((n) => n.toLowerCase().includes(q))
-    ).slice(0, 6);
+      ) {
+        questions.push(item);
+        if (questions.length >= 8) break;
+      }
+    }
 
     return { topics, questions };
   }, [quickQuery, trackMicrotopics]);
