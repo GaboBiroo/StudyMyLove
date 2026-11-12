@@ -79,7 +79,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [microtopicFilter, setMicrotopicFilter] = useState<string>(
     initialMicrotopicFilter
   );
-  const [boardFilter, setBoardFilter] = useState<ExamBoard | 'all'>('all');
+  const [boardFilter, setBoardFilter] = useState<ExamBoard | 'all' | 'all_europe'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'mcq5' | 'cebraspe_tf'>('all');
   const [onlyUnresolved, setOnlyUnresolved] = useState(false);
   const [showScratchpad, setShowScratchpad] = useState(false);
@@ -93,7 +93,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       } else if (q.microtopicId !== microtopicFilter) {
         return false;
       }
-      if (boardFilter !== 'all' && q.board !== boardFilter) return false;
+      if (boardFilter === 'all_europe') {
+        if (!q.board.startsWith('Europa')) return false;
+      } else if (boardFilter !== 'all' && q.board !== boardFilter) {
+        return false;
+      }
       if (typeFilter !== 'all' && q.questionType !== typeFilter) return false;
       if (onlyUnresolved) {
         const prog = profile.microtopics[q.microtopicId];
@@ -276,16 +280,33 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </label>
             <select
               value={boardFilter}
-              onChange={(e) => setBoardFilter(e.target.value as ExamBoard | 'all')}
+              onChange={(e) =>
+                setBoardFilter(e.target.value as ExamBoard | 'all' | 'all_europe')
+              }
               className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--kirby-pink)]"
             >
-              <option value="all">Todas as Bancas</option>
+              <option value="all">Todas as Bancas (Brasil & Europa)</option>
+              <option value="all_europe">
+                🇪🇺 Todas da Europa (CERN / ESA / EPSO / Offshore / CEng)
+              </option>
               <option value="Cesgranrio">Cesgranrio (Petrobras / BNDES)</option>
               <option value="Cebraspe">Cebraspe (Certo/Errado)</option>
               <option value="FGV">FGV (EPE / Concursos)</option>
-              <option value="Vunesp">Vunesp</option>
               <option value="Marinha CP-CEM">Marinha CP-CEM</option>
+              <option value="Vunesp">Vunesp</option>
               <option value="FCC">FCC</option>
+              <option value="Europa — CERN / ESA">
+                🇪🇺 Europa — CERN / ESA (Suíça / Espacial)
+              </option>
+              <option value="Europa — Energy Offshore (Equinor/Shell)">
+                🇪🇺 Europa — Energy Offshore (Equinor / Shell / Mar do Norte)
+              </option>
+              <option value="Europa — EPSO / UE">
+                🇪🇺 Europa — EPSO / União Europeia
+              </option>
+              <option value="Europa — CEng / Ordem dos Engenheiros">
+                🇪🇺 Europa — CEng / Ordem dos Engenheiros (FEANI)
+              </option>
             </select>
           </div>
 

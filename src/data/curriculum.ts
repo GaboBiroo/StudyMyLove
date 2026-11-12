@@ -1,7 +1,10 @@
 import { MICROTOPICS_MEC } from './microtopicsMec';
 import { MICROTOPICS_ELE_AND_BASIC } from './microtopicsEleAndBasic';
+import { EXTRA_VIDEOS_BY_MICROTOPIC } from './extraVideosCatalog';
 import { QUESTIONS_MEC } from './questionsMec';
 import { QUESTIONS_ELE_AND_BASIC } from './questionsEleAndBasic';
+import { QUESTIONS_EUROPE_AND_ADVANCED_MEC } from './questionsEuropeAndAdvancedMec';
+import { QUESTIONS_EUROPE_AND_ADVANCED_ELE } from './questionsEuropeAndAdvancedEle';
 import { FLASHCARDS_BANK } from './flashcardsBank';
 import type {
   FlashcardProgress,
@@ -15,9 +18,17 @@ import { addDaysISO } from '../engine/psychometrics';
 export const ALL_MICROTOPICS: Microtopic[] = [
   ...MICROTOPICS_MEC,
   ...MICROTOPICS_ELE_AND_BASIC,
-];
+].map((mt) => ({
+  ...mt,
+  videos: [...mt.videos, ...(EXTRA_VIDEOS_BY_MICROTOPIC[mt.id] ?? [])],
+}));
 
-export const ALL_QUESTIONS = [...QUESTIONS_MEC, ...QUESTIONS_ELE_AND_BASIC];
+export const ALL_QUESTIONS = [
+  ...QUESTIONS_MEC,
+  ...QUESTIONS_EUROPE_AND_ADVANCED_MEC,
+  ...QUESTIONS_ELE_AND_BASIC,
+  ...QUESTIONS_EUROPE_AND_ADVANCED_ELE,
+];
 export const ALL_FLASHCARDS = FLASHCARDS_BANK;
 
 export function getMicrotopicsForTrack(track: StudyTrack): Microtopic[] {
@@ -82,7 +93,7 @@ const INITIAL_SEEDS: Record<string, BaselineSeed> = {
 };
 
 export function createInitialUserProfile(
-  mode: 'calibrated' | 'blank' = 'calibrated'
+  mode: 'calibrated' | 'blank' = 'blank'
 ): UserStudyProfile {
   const now = new Date();
   const microtopics: Record<string, MicrotopicProgress> = {};
@@ -92,11 +103,11 @@ export function createInitialUserProfile(
       mode === 'calibrated'
         ? INITIAL_SEEDS[mt.id]
         : {
-            theta: mt.id === 'b-en-tech' ? 1.8 : 0.0,
-            pKnown: mt.id === 'b-en-tech' ? 0.90 : 0.35,
-            stabilityDays: 3,
-            daysAgo: 2,
-            difficulty: 5.5,
+            theta: 0.0,
+            pKnown: 0.0,
+            stabilityDays: 0,
+            daysAgo: 0,
+            difficulty: 5.0,
           };
 
     const lastReview = new Date(
@@ -106,10 +117,10 @@ export function createInitialUserProfile(
     microtopics[mt.id] = {
       microtopicId: mt.id,
       theta: seed.theta,
-      standardError: mode === 'calibrated' ? 0.42 : 1.25,
+      standardError: mode === 'calibrated' ? 0.42 : 1.5,
       responses: [],
       pKnown: seed.pKnown,
-      pInit: 0.35,
+      pInit: 0.45,
       pTransit: 0.16,
       pGuess: 0.2,
       pSlip: 0.1,
@@ -132,21 +143,15 @@ export function createInitialUserProfile(
   }
 
   const flashcards: Record<string, FlashcardProgress> = {};
-  ALL_FLASHCARDS.forEach((fc, idx) => {
+  ALL_FLASHCARDS.forEach((fc) => {
     const mtSeed = microtopics[fc.microtopicId];
-    // Make ~14 high-priority cards immediately due today so Block 1 Flash-Review is ready right out of the box!
-    const isDueToday = mtSeed.pKnown < 0.78 || idx % 4 === 0;
-    const daysAgo = isDueToday ? 6 : 1;
-    const stab = isDueToday ? 3.5 : 14;
-    const lastRev = new Date(now.getTime() - daysAgo * 86400000).toISOString();
-    const nextRev = isDueToday
-      ? new Date(now.getTime() - 3600000).toISOString()
-      : addDaysISO(stab, new Date(lastRev));
+    const lastRev = now.toISOString();
+    const nextRev = now.toISOString();
 
     flashcards[fc.id] = {
       cardId: fc.id,
       microtopicId: fc.microtopicId,
-      stabilityDays: stab,
+      stabilityDays: mode === 'calibrated' ? 3.5 : 0,
       difficulty: mtSeed.difficulty,
       lastReviewISO: lastRev,
       nextReviewISO: nextRev,
@@ -164,10 +169,10 @@ export function createInitialUserProfile(
     activeTrack: 'integrado',
     dailyGoalHours: 7,
     dayParity: dayOfMonth % 2 === 1 ? 'odd' : 'even',
-    selectedMicrotopicId: 'm-vib-mdof', // Highest urgency item initially
+    selectedMicrotopicId: 'm-thermo-cycles',
     completedRoutineBlocksToday: [],
     routineDateISO: todayISO,
-    streakDays: 1,
+    streakDays: 0,
     totalMinutesStudied: 0,
     microtopics,
     flashcards,

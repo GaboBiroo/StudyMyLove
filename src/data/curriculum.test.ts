@@ -8,9 +8,9 @@ import {
 } from './curriculum';
 
 describe('Curriculum & Content Data Integrity', () => {
-  it('contains all 28 microtopics, 56 questions, and 56 flashcards with unique IDs', () => {
+  it('contains all 28 microtopics, 140 questions (including European boards), and 56 flashcards with unique IDs', () => {
     expect(ALL_MICROTOPICS).toHaveLength(28);
-    expect(ALL_QUESTIONS).toHaveLength(56);
+    expect(ALL_QUESTIONS).toHaveLength(140);
     expect(ALL_FLASHCARDS).toHaveLength(56);
 
     const mtIds = new Set(ALL_MICROTOPICS.map((m) => m.id));
@@ -18,15 +18,20 @@ describe('Curriculum & Content Data Integrity', () => {
     const fcIds = new Set(ALL_FLASHCARDS.map((f) => f.id));
 
     expect(mtIds.size).toBe(28);
-    expect(qIds.size).toBe(56);
+    expect(qIds.size).toBe(140);
     expect(fcIds.size).toBe(56);
+
+    const europeanQuestions = ALL_QUESTIONS.filter((q) =>
+      q.board.startsWith('Europa')
+    );
+    expect(europeanQuestions.length).toBeGreaterThanOrEqual(40);
   });
 
-  it('ensures every microtopic has non-empty compendium, verified videos, and references', () => {
+  it('ensures every microtopic has non-empty compendium, expanded verified videos (>=4), and references', () => {
     const validYouTubeId = /^[A-Za-z0-9_-]{11}$/;
     for (const mt of ALL_MICROTOPICS) {
       expect(mt.compendium.length, `${mt.id} compendium`).toBeGreaterThanOrEqual(1);
-      expect(mt.videos.length, `${mt.id} videos`).toBeGreaterThanOrEqual(1);
+      expect(mt.videos.length, `${mt.id} videos`).toBeGreaterThanOrEqual(3);
       expect(mt.books.length, `${mt.id} books`).toBeGreaterThanOrEqual(1);
       for (const v of mt.videos) {
         if (v.youtubeId) {
@@ -83,6 +88,10 @@ describe('Curriculum & Content Data Integrity', () => {
     );
     expect(calibrated.microtopics['b-en-tech'].theta).toBeGreaterThan(2.0);
     expect(blank.microtopics['m-solids-mohr'].theta).toBe(0);
-    expect(blank.microtopics['b-en-tech'].theta).toBe(1.8);
+    expect(blank.microtopics['m-solids-mohr'].pKnown).toBe(0);
+    expect(blank.microtopics['b-en-tech'].theta).toBe(0);
+    expect(blank.microtopics['b-en-tech'].pKnown).toBe(0);
+    expect(blank.streakDays).toBe(0);
+    expect(blank.totalMinutesStudied).toBe(0);
   });
 });

@@ -31,7 +31,18 @@ export type ExamBoard =
   | 'Vunesp'
   | 'FCC'
   | 'Marinha CP-CEM'
-  | 'UNIP Nivelamento';
+  | 'UNIP Nivelamento'
+  | 'Europa — CERN / ESA'
+  | 'Europa — EPSO / UE'
+  | 'Europa — Energy Offshore (Equinor/Shell)'
+  | 'Europa — CEng / Ordem dos Engenheiros';
+
+export type EngineerLevelId =
+  | 'untested'
+  | 'junior'
+  | 'plena'
+  | 'senior'
+  | 'expert';
 
 export type ErrorCategory = 'conceptual' | 'slip' | 'normative' | 'trap';
 
@@ -68,8 +79,14 @@ export interface VideoResource {
   duration: string;
   whyWatch: string;
   youtubeId?: string; // Only verified embeddable YouTube IDs
-  url: string; // Verified YouTube / MIT OCW / NPTEL / UNIVESP URL
-  platform: 'YouTube' | 'MIT OCW' | 'NPTEL' | 'UNIVESP';
+  url: string; // Verified YouTube / MIT OCW / NPTEL / UNIVESP / TU Delft / ETH URL
+  platform:
+    | 'YouTube'
+    | 'MIT OCW'
+    | 'NPTEL'
+    | 'UNIVESP'
+    | 'TU Delft / ETH'
+    | 'Imperial / Cambridge';
 }
 
 export interface BookReference {
@@ -201,6 +218,11 @@ export interface ExamSimulationResult {
   dateISO: string;
   bossId: 'dedede' | 'metaknight' | 'galactaknight';
   board: ExamBoard;
+  title?: string;
+  themeLabel?: string;
+  untimed?: boolean;
+  engineerLevel?: EngineerLevelId;
+  engineerLevelLabel?: string;
   totalQuestions: number;
   correctCount: number;
   wrongCount: number;

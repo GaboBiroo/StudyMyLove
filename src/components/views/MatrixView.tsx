@@ -16,7 +16,10 @@ import {
   createInitialUserProfile,
   getMicrotopicsForTrack,
 } from '../../data/curriculum';
-import { diagnoseMicrotopic } from '../../engine/psychometrics';
+import {
+  classifyEngineerLevel,
+  diagnoseMicrotopic,
+} from '../../engine/psychometrics';
 import { recordQuestionAttempt } from '../../utils/storage';
 import type { ExerciseQuestion, UserStudyProfile } from '../../types/study';
 import { CopyAbilityBadge } from '../KirbyArtwork';
@@ -64,7 +67,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         seenMt.add(q.microtopicId);
         picked.push(q);
       }
-      if (picked.length >= 15) break;
+      if (picked.length >= 28) break;
     }
     return picked;
   }, [visibleMicrotopics]);
@@ -175,15 +178,24 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={() => onNavigate('simulados')}
+              className="dream-btn-primary px-3 py-1.5 text-xs inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Target className="w-3.5 h-3.5" />
+              Simulado Sem Tempo / Por Tema
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setCalStep(0);
                 setCalCorrectCount(0);
                 setCalibrationOpen(true);
               }}
-              className="dream-btn-primary px-3 py-1.5 text-xs inline-flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5 cursor-pointer"
             >
-              <Target className="w-3.5 h-3.5" />
-              Nivelamento Rápido (15 Questões)
+              <Target className="w-3.5 h-3.5 text-[var(--kirby-pink)]" />
+              Nivelamento Rápido ({calibrationQuestions.length} Questões)
             </button>
 
             <button
@@ -262,16 +274,9 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             <button
               type="button"
               onClick={() => handleResetProfile('blank')}
-              className="px-2 py-1 rounded bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-secondary)] inline-flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-[11px] font-semibold text-rose-700 inline-flex items-center gap-1 cursor-pointer"
             >
-              <RefreshCw className="w-3 h-3" /> Zerar (θ=0)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleResetProfile('calibrated')}
-              className="px-2 py-1 rounded bg-[var(--bg-elevated)] hover:bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-secondary)] inline-flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" /> Baseline Inicial
+              <RefreshCw className="w-3 h-3" /> Zerar Tudo (100% Zerado)
             </button>
           </div>
         </div>
@@ -297,11 +302,10 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             <thead>
               <tr className="bg-[var(--bg-elevated)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border-subtle)]">
                 <th className="py-3 px-4">Matéria & Normas</th>
+                <th className="py-3 px-3">Nível Medido</th>
                 <th className="py-3 px-3">Estudo</th>
                 <th className="py-3 px-3">Domínio</th>
                 <th className="py-3 px-3">TRI (θ̂)</th>
-                <th className="py-3 px-3">Retenção</th>
-                <th className="py-3 px-3">Erros</th>
                 <th className="py-3 px-4">Recomendação Prática</th>
                 <th className="py-3 px-4 text-right">Acesso</th>
               </tr>
@@ -309,6 +313,19 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             <tbody className="divide-y divide-[var(--border-subtle)] text-xs">
               {rows.map(({ mt, prog, diag }) => {
                 const pct = Math.round(prog.pKnown * 100);
+                const correctCount = prog.responses.filter(
+                  (r) => r.correct
+                ).length;
+                const accPct =
+                  prog.responses.length > 0
+                    ? Math.round((correctCount / prog.responses.length) * 100)
+                    : 0;
+                const engLvl = classifyEngineerLevel({
+                  attempts: prog.responses.length,
+                  accuracyPct: accPct,
+                  theta: prog.theta,
+                });
+
                 return (
                   <tr
                     key={mt.id}
@@ -336,6 +353,19 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                           Normas: {mt.norms.join(', ')}
                         </div>
                       )}
+                    </td>
+
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span
+                        className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${engLvl.badgeCls}`}
+                      >
+                        {engLvl.shortBadge}
+                      </span>
+                      <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">
+                        {prog.responses.length > 0
+                          ? `${correctCount}/${prog.responses.length} (${accPct}%)`
+                          : '0 questões'}
+                      </div>
                     </td>
 
                     <td className="py-3 px-3 whitespace-nowrap">
@@ -384,20 +414,6 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                       <div className="text-[10px] text-[var(--text-muted)]">
                         ±{prog.standardError.toFixed(2)}
                       </div>
-                    </td>
-
-                    <td className="py-3 px-3 font-mono whitespace-nowrap">
-                      <div className="font-bold text-[var(--text-primary)]">
-                        {diag.projectedRetention.toFixed(0)}%
-                      </div>
-                      <div className="text-[10px] text-[var(--text-muted)]">
-                        S={prog.stabilityDays.toFixed(1)}d
-                      </div>
-                    </td>
-
-                    <td className="py-3 px-3 font-mono whitespace-nowrap text-[11px] text-[var(--text-secondary)]">
-                      C:{prog.errorCounts.conceptual} S:{prog.errorCounts.slip}{' '}
-                      N:{prog.errorCounts.normative}
                     </td>
 
                     <td className="py-3 px-4 max-w-xs text-[var(--text-secondary)] leading-snug">

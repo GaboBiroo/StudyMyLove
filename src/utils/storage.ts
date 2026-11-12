@@ -16,19 +16,19 @@ import type {
   UserStudyProfile,
 } from '../types/study';
 
-const STORAGE_KEY = 'dreamland_academy_thaisa_v1';
+const STORAGE_KEY = 'studymylove_thaisa_zeroed_v3';
 
 export function loadUserProfile(): UserStudyProfile {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createInitialUserProfile('calibrated');
+    if (!raw) return createInitialUserProfile('blank');
     const parsed = JSON.parse(raw) as UserStudyProfile;
     if (!parsed || !parsed.microtopics) {
-      return createInitialUserProfile('calibrated');
+      return createInitialUserProfile('blank');
     }
 
     // Ensure any newly added microtopics exist safely
-    const fresh = createInitialUserProfile('calibrated');
+    const fresh = createInitialUserProfile('blank');
     for (const mt of ALL_MICROTOPICS) {
       if (!parsed.microtopics[mt.id]) {
         parsed.microtopics[mt.id] = fresh.microtopics[mt.id];
@@ -50,7 +50,7 @@ export function loadUserProfile(): UserStudyProfile {
 
     return parsed;
   } catch {
-    return createInitialUserProfile('calibrated');
+    return createInitialUserProfile('blank');
   }
 }
 
@@ -229,10 +229,11 @@ export function recordFlashcardReview(
   let updatedMt = mt;
   if (mt) {
     // Active recall review reinforces microtopic stability & BKT slightly
+    const basePKnown = mt.pKnown <= 0.001 ? 0.25 : mt.pKnown;
     const bktBonus =
       grade >= 3
-        ? Math.min(0.995, mt.pKnown + (1 - mt.pKnown) * 0.08)
-        : Math.max(0.15, mt.pKnown * 0.94);
+        ? Math.min(0.995, basePKnown + (1 - basePKnown) * 0.12)
+        : Math.max(0.10, basePKnown * 0.85);
 
     updatedMt = {
       ...mt,

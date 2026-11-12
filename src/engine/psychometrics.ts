@@ -1,4 +1,5 @@
 import type {
+  EngineerLevelId,
   ErrorCategory,
   FsrsRating,
   IrtResponseRecord,
@@ -139,6 +140,7 @@ export function updateBKT(params: {
   updatedSlip: number;
 } {
   const { pKnown, pTransit, pGuess, pSlip, correct, errorCategory, wasGuess } = params;
+  const effectivePrior = pKnown <= 0.001 ? 0.45 : pKnown;
 
   let effGuess = pGuess;
   let effSlip = pSlip;
@@ -159,13 +161,13 @@ export function updateBKT(params: {
 
   let posterior: number;
   if (correct) {
-    const num = pKnown * (1 - effSlip);
-    const den = num + (1 - pKnown) * effGuess;
-    posterior = den > 0 ? num / den : pKnown;
+    const num = effectivePrior * (1 - effSlip);
+    const den = num + (1 - effectivePrior) * effGuess;
+    posterior = den > 0 ? num / den : effectivePrior;
   } else {
-    const num = pKnown * effSlip;
-    const den = num + (1 - pKnown) * (1 - effGuess);
-    posterior = den > 0 ? num / den : pKnown;
+    const num = effectivePrior * effSlip;
+    const den = num + (1 - effectivePrior) * (1 - effGuess);
+    posterior = den > 0 ? num / den : effectivePrior;
   }
 
   const next = posterior + (1 - posterior) * pTransit;
@@ -309,8 +311,82 @@ export function addDaysISO(days: number, fromDate = new Date()): string {
   return next.toISOString();
 }
 
+export interface EngineerLevelDiagnosis {
+  id: EngineerLevelId;
+  label: string;
+  shortBadge: string;
+  description: string;
+  badgeCls: string;
+}
+
+export function classifyEngineerLevel(params: {
+  attempts: number;
+  accuracyPct: number;
+  theta?: number;
+}): EngineerLevelDiagnosis {
+  const { attempts, accuracyPct, theta = 0 } = params;
+  if (attempts <= 0) {
+    return {
+      id: 'untested',
+      label: 'Sem Diagnóstico (0 questões)',
+      shortBadge: 'Não Avaliada',
+      description:
+        'Ainda sem questões respondidas neste tema. Faça um simulado diagnóstico sem limite de tempo para medir seu nível.',
+      badgeCls:
+        'bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-subtle)]',
+    };
+  }
+
+  if (accuracyPct >= 85 || (accuracyPct >= 78 && theta >= 1.25)) {
+    return {
+      id: 'expert',
+      label: 'Engenheira Expert / Master',
+      shortBadge: 'Engenheira Expert',
+      description:
+        'Domínio de alto nível (padrão aprovação Petrobras, Transpetro, CERN, ESA e processos seletivos europeus).',
+      badgeCls:
+        'bg-emerald-500/15 text-emerald-700 border-emerald-500/40',
+    };
+  }
+
+  if (accuracyPct >= 72 || (accuracyPct >= 65 && theta >= 0.65)) {
+    return {
+      id: 'senior',
+      label: 'Engenheira Sênior / Avançada',
+      shortBadge: 'Engenheira Sênior',
+      description:
+        'Forte domínio analítico e normativo, acima da média industrial; pequenos ajustes levam ao nível Expert.',
+      badgeCls:
+        'bg-sky-500/15 text-sky-700 border-sky-500/40',
+    };
+  }
+
+  if (accuracyPct >= 50 || theta >= -0.15) {
+    return {
+      id: 'plena',
+      label: 'Engenheira Normal / Plena',
+      shortBadge: 'Engenheira Normal',
+      description:
+        'Domina a base sólida de engenharia de campo/indústria; pratique as pegadinhas de banca e normas específicas para subir a Expert.',
+      badgeCls:
+        'bg-amber-500/15 text-amber-700 border-amber-500/40',
+    };
+  }
+
+  return {
+    id: 'junior',
+    label: 'Engenheira em Base / Revisão',
+    shortBadge: 'Base / Revisão',
+    description:
+      'Tema que pede revisão do Caderno Teórico, Formulário de Equações e vídeo-base antes de avançar para questões difíceis.',
+    badgeCls:
+      'bg-rose-500/15 text-rose-700 border-rose-500/40',
+  };
+}
+
 export interface DiagnosticSummary {
   statusLabel:
+    | 'Não Avaliado (0%)'
     | 'Maestria Plena'
     | 'Consolidado / Excelente'
     | 'Estável / Seguro'
@@ -330,6 +406,22 @@ export function diagnoseMicrotopic(
   progress: MicrotopicProgress,
   now = new Date()
 ): DiagnosticSummary {
+  if (
+    progress.responses.length === 0 &&
+    progress.fsrsReps === 0 &&
+    progress.pKnown <= 0.001
+  ) {
+    return {
+      statusLabel: 'Não Avaliado (0%)',
+      tone: 'amber',
+      projectedRetention: 0,
+      intervention:
+        'Matéria zerada (ainda não avaliada). Faça um Simulado por Tema sem limite de tempo ou resolva questões para descobrir se seu nível aqui é Engenheira Normal ou Expert.',
+      recommendedMode: 'drills',
+      priorityScore: 50,
+    };
+  }
+
   const elapsed = daysBetweenISO(progress.lastReviewISO, now);
   const retention = fsrsRetention(elapsed, progress.stabilityDays);
   const { theta, pKnown, errorCounts } = progress;

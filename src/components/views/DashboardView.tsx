@@ -26,7 +26,10 @@ import {
   PLANETS,
   TRACK_METADATA,
 } from '../../data/planetsAndCopyAbilities';
-import { diagnoseMicrotopic } from '../../engine/psychometrics';
+import {
+  classifyEngineerLevel,
+  diagnoseMicrotopic,
+} from '../../engine/psychometrics';
 import type {
   MacroArea,
   RoutineBlock,
@@ -135,10 +138,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       diagnostics.reduce((acc, d) => acc + d.prog.pKnown, 0) / total;
 
     const solvedQuestionsSet = new Set<string>();
+    let totalAttempts = 0;
+    let totalCorrectAttempts = 0;
     diagnostics.forEach((d) => {
       d.prog.responses.forEach((r) => {
-        if (r.correct) solvedQuestionsSet.add(r.questionId);
+        totalAttempts += 1;
+        if (r.correct) {
+          solvedQuestionsSet.add(r.questionId);
+          totalCorrectAttempts += 1;
+        }
       });
+    });
+
+    const overallAccuracyPct =
+      totalAttempts > 0
+        ? Math.round((totalCorrectAttempts / totalAttempts) * 100)
+        : 0;
+    const engineerLevel = classifyEngineerLevel({
+      attempts: totalAttempts,
+      accuracyPct: overallAccuracyPct,
+      theta: avgTheta,
     });
 
     return {
@@ -148,6 +167,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       avgTheta: Number(avgTheta.toFixed(2)),
       avgPKnownPct: Math.round(avgPKnown * 100),
       solvedQuestions: solvedQuestionsSet.size,
+      totalAttempts,
+      overallAccuracyPct,
+      engineerLevel,
     };
   }, [diagnostics]);
 
@@ -386,13 +408,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
                 <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                  03 • Prática Ativa
+                  03 • Banco Gigante (BR & Europa)
                 </span>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   Resolva Questões
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Treine nas <strong>56 questões comentadas</strong> usando a folha de rascunho. Quando errar, marque o motivo para calibrar sua revisão.
+                  Treine nas <strong>{ALL_QUESTIONS.length} questões comentadas</strong> (Petrobras, Cebraspe, FGV e processos seletivos europeus como CERN, ESA e EPSO).
                 </p>
               </div>
               <button
@@ -400,28 +422,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={() => onNavigate('exercicios')}
                 className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
               >
-                Banco de Questões <ArrowRight className="w-3 h-3" />
+                Banco de Questões ({ALL_QUESTIONS.length}) <ArrowRight className="w-3 h-3" />
               </button>
             </div>
 
             <div className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
                 <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--kirby-pink-soft)] text-[var(--kirby-pink)]">
-                  04 • Revisão & Provas
+                  04 • Nível Normal vs. Expert
                 </span>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  Flashcards & Simulados
+                  Simulado Sem Tempo ou Por Tema
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Revise os <strong>Flashcards FSRS</strong> vencidos (teclas <code>Espaço</code> e <code>1–4</code>) e teste seu tempo nos <strong>Simulados de Banca</strong>.
+                  Faça um <strong>Simulado Diagnóstico sem limite de tempo</strong> ou escolha um tema específico para medir se seu nível é <strong>Engenheira Normal</strong> ou <strong>Expert</strong>.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => onNavigate('auto-revisao')}
+                onClick={() => onNavigate('simulados')}
                 className="text-left text-xs font-semibold text-[var(--kirby-pink)] hover:underline inline-flex items-center gap-1 cursor-pointer"
               >
-                Revisar Flashcards <ArrowRight className="w-3 h-3" />
+                Medir Meu Nível Agora <ArrowRight className="w-3 h-3" />
               </button>
             </div>
           </div>
@@ -431,21 +453,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 3. PAINEL DE HOJE — 3 CARTÕES SIMÉTRICOS E BEM POSICIONADOS */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <WarpStarIcon size={18} />
-            <span>Seu Foco de Hoje</span>
-          </h2>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <WarpStarIcon size={18} />
+              <span>Seu Diagnóstico & Foco de Hoje</span>
+            </h2>
+            <span
+              className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${stats.engineerLevel.badgeCls}`}
+            >
+              {stats.engineerLevel.label}
+            </span>
+          </div>
           <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-[var(--text-secondary)]">
             <span>
               Matérias lidas: <strong>{stats.readDone}/{stats.total}</strong>
             </span>
             <span>•</span>
             <span>
-              Questões: <strong>{stats.solvedQuestions}/{ALL_QUESTIONS.length}</strong>
+              Questões acertadas: <strong>{stats.solvedQuestions}/{ALL_QUESTIONS.length}</strong>
             </span>
             <span>•</span>
             <span>
-              Domínio médio: <strong>{stats.avgPKnownPct}%</strong> (θ̂ {stats.avgTheta})
+              Domínio médio: <strong>{stats.avgPKnownPct}%</strong>
             </span>
           </div>
         </div>
@@ -704,6 +733,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           (q) => q.microtopicId === mt.id
                         ).length;
                         const pct = Math.round(prog.pKnown * 100);
+                        const mtCorrect = prog.responses.filter(
+                          (r) => r.correct
+                        ).length;
+                        const mtAcc =
+                          prog.responses.length > 0
+                            ? Math.round(
+                                (mtCorrect / prog.responses.length) * 100
+                              )
+                            : 0;
+                        const mtLevel = classifyEngineerLevel({
+                          attempts: prog.responses.length,
+                          accuracyPct: mtAcc,
+                          theta: prog.theta,
+                        });
 
                         return (
                           <div
@@ -722,6 +765,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 >
                                   {mt.title}
                                 </button>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${mtLevel.badgeCls}`}
+                                >
+                                  {mtLevel.shortBadge}
+                                </span>
                                 {prog.readingCompleted && (
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
                                     ✓ Lido

@@ -850,10 +850,10 @@ export function App() {
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  Resolva Questões com Folha de Rascunho
+                  Resolva as 140 Questões (Brasil & Europa)
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Em <strong>Banco de Questões</strong>, filtre por matéria ou banca (Cesgranrio, Cebraspe, FGV, Marinha). Use o botão <strong>Rascunho de Cálculo</strong> para anotar suas contas. Ao errar uma questão, clique no motivo do erro (<em>Conceito, Cálculo, Norma ou Interpretação</em>) para o sistema ajustar suas prioridades.
+                  Em <strong>Banco de Questões</strong>, filtre por matéria ou banca (Cesgranrio, Cebraspe, FGV, Marinha e processos seletivos europeus como <strong>CERN, ESA, EPSO, Equinor/Shell e CEng</strong>). Use o botão <strong>Rascunho de Cálculo</strong> para anotar suas contas e marque o motivo do erro quando errar.
                 </p>
                 <button
                   type="button"
@@ -873,24 +873,24 @@ export function App() {
                     Passo 4
                   </span>
                   <span className="text-[11px] text-[var(--text-muted)]">
-                    Memória de Longo Prazo
+                    Diagnóstico de Nível
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  Flashcards FSRS, Simulados e Busca (Ctrl+K)
+                  Simulado Sem Tempo, Simulado por Tema e Flashcards
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Todo dia pela manhã, revise os <strong>Flashcards FSRS</strong> vencidos (use <code>Espaço</code> para virar e <code>1</code> a <code>4</code> para avaliar). À tarde, faça um <strong>Simulado de Banca</strong> cronometrado. E a qualquer momento, aperte <code>Ctrl + K</code> para procurar qualquer norma (ex: <em>NR-13, API 610</em>) ou equação!
+                  Como tudo começa <strong>100% zerado</strong>, vá em <strong>Simulados & Provas</strong> para fazer um <strong>Diagnóstico Sem Limite de Tempo</strong> (28, 56 ou 140 questões) ou um <strong>Simulado por Tema</strong> para saber se seu nível atual naquela área é <strong>Engenheira Normal (Plena)</strong>, <strong>Sênior</strong> ou <strong>Expert</strong>!
                 </p>
                 <button
                   type="button"
                   onClick={() => {
                     setTutorialModalOpen(false);
-                    handleNavigate('auto-revisao');
+                    handleNavigate('simulados');
                   }}
                   className="text-xs font-semibold text-[var(--kirby-pink)] hover:underline cursor-pointer pt-1 inline-block"
                 >
-                  Abrir Flashcards FSRS →
+                  Abrir Simulados & Diagnóstico de Nível →
                 </button>
               </div>
             </div>
